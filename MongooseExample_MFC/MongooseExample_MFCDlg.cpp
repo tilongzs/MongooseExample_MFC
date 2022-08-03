@@ -712,14 +712,15 @@ void CMongooseExample_MFCDlg::OnBtnConnect()
 		AppendMsg(L"TCP客户端事件循环结束");
 	}).detach();
 
-	_currentEventData = make_shared<EventData>(this);
-#ifdef _USE_RANDOM_LOCALPORT
-		// 使用任意本地端口连接服务端
 	CStringA url;
 	url.Format("tcp://127.0.0.1:%d", remotePort);
 	CString strLog;
 	strLog.Format(L"开始连接服务端：%s", S2Unicode(url).c_str());
 	AppendMsg(strLog);
+
+	_currentEventData = make_shared<EventData>(this);
+#ifdef _USE_RANDOM_LOCALPORT
+	// 使用任意本地端口连接服务端
 	_currentEventData->conn = mg_connect(mgr, url, OnTCPClientEvent, _currentEventData.get());
 	if (nullptr == _currentEventData->conn)
 	{
@@ -727,14 +728,8 @@ void CMongooseExample_MFCDlg::OnBtnConnect()
 		AppendMsg(L"mg_connect失败");
 		return;
 	}
-
-	if (IsUseSSL())
-	{
-		mg_tls_opts tlsOpts;
-		memset(&tlsOpts, 0, sizeof(mg_tls_opts));
-		mg_tls_init(_currentEventData->conn, &tlsOpts);
-	}
 #else
+	// 使用指定本地端口连接服务端
 	SOCKET sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	// 修改socket属性
 	const int bufLen = SINGLE_PACKAGE_SIZE;
@@ -776,30 +771,17 @@ void CMongooseExample_MFCDlg::OnBtnConnect()
 		return;
 	}
 
-	_currentEventData->conn->is_client = true;
-	_currentEventData->conn->is_connecting = true;
+	// 开始连接
+	//_currentEventData->conn->is_client = true;
+	mg_resolve(_currentEventData->conn, url);
+#endif
+
 	if (IsUseSSL())
 	{
 		mg_tls_opts tlsOpts;
 		memset(&tlsOpts, 0, sizeof(mg_tls_opts));
 		mg_tls_init(_currentEventData->conn, &tlsOpts);
 	}
-
-	if (0 != ::connect(sockfd, (sockaddr*)&remoteAddr, sizeof(sockaddr)))
-	{
-		_isNeedClose = true;
-		::closesocket(sockfd);
-		AppendMsg(L"连接服务端失败");
-		return;
-	}
-
-	tmpStr.Format(L"与服务端remote:%s:%d连接成功 local:%s:%d", S2Unicode(DEFAULT_SOCKET_IP).c_str(), remotePort, S2Unicode(DEFAULT_SOCKET_IP).c_str(), localPort);
-	AppendMsg(tmpStr);
-
-	
-#endif
-
-	//eventData->conn->is_client = true;
 }
 
 void CMongooseExample_MFCDlg::OnBtnDisconnectServer()
