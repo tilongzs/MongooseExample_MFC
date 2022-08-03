@@ -866,6 +866,14 @@ void OnUDPEvent(mg_connection* conn, int ev, void* ev_data, void* fn_data)
 		listenEventData->dlg->AppendMsg(tmpStr);
 	}
 	break;
+	case MG_EV_OPEN:
+	{
+		CString tmpStr;
+		tmpStr.Format(L"UDP初始化完成 local:%s", GenerateIPPortString(conn->loc));
+		listenEventData->dlg->AppendMsg(tmpStr);
+		break;
+	}
+	break;
 	case MG_EV_POLL:
 		break;
 	case MG_EV_RESOLVE:
@@ -904,7 +912,7 @@ void OnUDPEvent(mg_connection* conn, int ev, void* ev_data, void* fn_data)
 	}
 	break;
 	default:
-		listenEventData->dlg->AppendMsg(L"OnTCPEvent default");
+		listenEventData->dlg->AppendMsg(L"OnUDPEvent default");
 		break;
 	}
 }
@@ -948,15 +956,14 @@ void CMongooseExample_MFCDlg::OnBtnUdpBind()
 
 void CMongooseExample_MFCDlg::OnBtnUdpSendMsg()
 {
+	DWORD dwRemoteIP;
+	_ipRemote.GetAddress(dwRemoteIP);
+
 	CString tmpStr;
 	_editRemotePort.GetWindowText(tmpStr);
 	const int remotePort = _wtoi(tmpStr);
-
 	sockaddr_in remoteAddr = { 0 };
-	if (!ConvertIPPort("0.0.0.0", remotePort, remoteAddr))
-	{
-		AppendMsg(L"IP地址无效");
-	}
+	ConvertIPPort(dwRemoteIP, remotePort, remoteAddr);
 
 	if (_listenEventData)
 	{
