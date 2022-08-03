@@ -41,17 +41,14 @@ private:
 	CButton _btnUseSSL;
 	CButton _btnHTTPServer;
 	CButton _btnStopHttpServer;
+	CIPAddressCtrl _ipRemote;
 
 	mg_mgr	_mgr;	// 公用Mongoose管理器
 
-	// TCP
+	// TCP/UDP
 	shared_ptr<EventData> _listenEventData = nullptr;
 	shared_ptr<EventData> _currentEventData = nullptr;
-	bool			_isNeedClose = false;
-
-	// UDP
-	// 	evutil_socket_t _currentSockfd = -1;
-	// 	event* _currentEvent = nullptr;
+	bool			_isNeedDeleteMgr = false;
 
 	// HTTP
 	// 	evhttp* _httpServer = nullptr;

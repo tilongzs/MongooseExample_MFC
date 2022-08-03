@@ -1,4 +1,4 @@
-// Copyright (c) 2004-2013 Sergey Lyubka
+﻿// Copyright (c) 2004-2013 Sergey Lyubka
 // Copyright (c) 2013-2022 Cesanta Software Limited
 // All rights reserved
 //
@@ -666,7 +666,8 @@ int sscanf(const char *, const char *, ...);
 
 // Granularity of the send/recv IO buffer growth
 #ifndef MG_IO_SIZE
-#define MG_IO_SIZE 2048
+//#define MG_IO_SIZE 2048
+#define MG_IO_SIZE 1024*64
 #endif
 
 // Maximum size of the recv IO buffer

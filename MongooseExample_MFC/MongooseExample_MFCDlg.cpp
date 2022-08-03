@@ -28,7 +28,6 @@ using namespace chrono;
 #endif
 
 #define WMSG_FUNCTION		WM_USER + 1
-#define DEFAULT_SOCKET_IP "127.0.0.1"
 #define DEFAULT_SOCKET_PORT 23300
 #define SINGLE_PACKAGE_SIZE 1024 * 64 // 默认16384
 #define SINGLE_UDP_PACKAGE_SIZE 65507 // 单个UDP包的最大大小（理论值：65507字节）
@@ -126,6 +125,7 @@ CMongooseExample_MFCDlg::CMongooseExample_MFCDlg(CWnd* pParent /*=nullptr*/)
 void CMongooseExample_MFCDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
+	DDX_Control(pDX, IDC_IPADDRESS1, _ipRemote);
 	DDX_Control(pDX, IDC_EDIT_MSG, _editRecv);
 	DDX_Control(pDX, IDC_EDIT_PORT, _editPort);
 	DDX_Control(pDX, IDC_EDIT_PORT_REMOTE, _editRemotePort);
@@ -164,6 +164,7 @@ BOOL CMongooseExample_MFCDlg::OnInitDialog()
 	SetIcon(m_hIcon, FALSE);
 
 	_editPort.SetWindowText(L"23300");
+	_ipRemote.SetAddress(127, 0, 0, 1);
 	_editRemotePort.SetWindowText(L"23300");
 
 	_btnStopHttpServer.EnableWindow(FALSE);
@@ -180,8 +181,8 @@ BOOL CMongooseExample_MFCDlg::OnInitDialog()
 			}
 		}).detach();
 
-		AppendMsg(L"启动 Mongoose is not thread-safe");
-		return TRUE;
+	AppendMsg(L"启动 Mongoose is not thread-safe");
+	return TRUE;
 }
 
 HCURSOR CMongooseExample_MFCDlg::OnQueryDragIcon()
@@ -244,7 +245,7 @@ void CMongooseExample_MFCDlg::OnDisconnectClient(mg_connection* conn)
 
 void CMongooseExample_MFCDlg::OnDisconnectServer()
 {
-	_isNeedClose = true;
+	_isNeedDeleteMgr = true;
 }
 
 LRESULT CMongooseExample_MFCDlg::OnFunction(WPARAM wParam, LPARAM lParam)
@@ -502,13 +503,13 @@ void OnTCPServerEvent(mg_connection* conn, int ev, void* ev_data, void* fn_data)
 
 void CMongooseExample_MFCDlg::OnBtnListen()
 {
-	_isNeedClose = false;
+	_isNeedDeleteMgr = false;
 
 	mg_mgr* mgr = new mg_mgr;
 	mg_mgr_init(mgr);
 	thread([&, mgr]
 	{
-		while (!_isNeedClose)
+		while (!_isNeedDeleteMgr)
 		{
 			mg_mgr_poll(mgr, 1);
 		}
@@ -533,7 +534,7 @@ void CMongooseExample_MFCDlg::OnBtnListen()
 	if (!_listenEventData->conn)
 	{
 		AppendMsg(L"TCP开始监听失败");
-		_isNeedClose = true;
+		_isNeedDeleteMgr = true;
 	}
 }
 
@@ -546,7 +547,7 @@ void CMongooseExample_MFCDlg::OnBtnStopListen()
 	}
 
 	// 关闭事件循环
-	_isNeedClose = true;
+	_isNeedDeleteMgr = true;
 }
 
 // static void OnClientWrite(bufferevent* bev, void* param)
@@ -679,31 +680,23 @@ void OnTCPClientEvent(mg_connection* conn, int ev, void* ev_data, void* fn_data)
 
 void CMongooseExample_MFCDlg::OnBtnConnect()
 {
-	_isNeedClose = false;
+	_isNeedDeleteMgr = false;
 
 	// 使用指定的本地IP、端口
 	CString tmpStr;
-	_editPort.GetWindowText(tmpStr);
-	const int localPort = _wtoi(tmpStr);
-	SOCKADDR_IN localAddr;
-	ConvertIPPort(DEFAULT_SOCKET_IP, localPort, localAddr);
+	DWORD dwRemoteIP;
+	_ipRemote.GetAddress(dwRemoteIP);
 
 	_editRemotePort.GetWindowText(tmpStr);
 	const int remotePort = _wtoi(tmpStr);
 	SOCKADDR_IN remoteAddr;
-	ConvertIPPort(DEFAULT_SOCKET_IP, remotePort, remoteAddr);
-
-	if (localPort == remotePort)
-	{
-		AppendMsg(L"当远程和本地IP相同时，端口不能也相同！");
-		return;
-	}
+	ConvertIPPort(dwRemoteIP, remotePort, remoteAddr);
 
 	mg_mgr* mgr = new mg_mgr;
 	mg_mgr_init(mgr);
 	thread([&, mgr]
 	{
-		while (!_isNeedClose)
+		while (!_isNeedDeleteMgr)
 		{
 			mg_mgr_poll(mgr, 1);
 		}
@@ -724,12 +717,17 @@ void CMongooseExample_MFCDlg::OnBtnConnect()
 	_currentEventData->conn = mg_connect(mgr, url, OnTCPClientEvent, _currentEventData.get());
 	if (nullptr == _currentEventData->conn)
 	{
-		_isNeedClose = true;
+		_isNeedDeleteMgr = true;
 		AppendMsg(L"mg_connect失败");
 		return;
 	}
 #else
 	// 使用指定本地端口连接服务端
+	_editPort.GetWindowText(tmpStr);
+	const int localPort = _wtoi(tmpStr);
+	SOCKADDR_IN localAddr;
+	ConvertIPPort("0.0.0.0", localPort, localAddr);
+
 	SOCKET sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	// 修改socket属性
 	const int bufLen = SINGLE_PACKAGE_SIZE;
@@ -748,7 +746,7 @@ void CMongooseExample_MFCDlg::OnBtnConnect()
 	optLinger.l_linger = 0;
 	if (setsockopt(sockfd, SOL_SOCKET, SO_LINGER, (const char*)&optLinger, sizeof(linger)) != 0)
 	{
-		_isNeedClose = true;
+		_isNeedDeleteMgr = true;
 		::closesocket(sockfd);
 		AppendMsg(L"TCP客户端setsockopt SO_LINGER失败");
 		return;
@@ -756,7 +754,7 @@ void CMongooseExample_MFCDlg::OnBtnConnect()
 
 	if (0 != ::bind(sockfd, (sockaddr*)&localAddr, sizeof(sockaddr)))
 	{
-		_isNeedClose = true;
+		_isNeedDeleteMgr = true;
 		::closesocket(sockfd);
 		AppendMsg(L"绑定本地端口失败");
 		return;
@@ -765,14 +763,13 @@ void CMongooseExample_MFCDlg::OnBtnConnect()
 	_currentEventData->conn = mg_wrapfd(mgr, sockfd, OnTCPClientEvent, _currentEventData.get());
 	if (nullptr == _currentEventData->conn)
 	{
-		_isNeedClose = true;
+		_isNeedDeleteMgr = true;
 		::closesocket(sockfd);
 		AppendMsg(L"mg_wrapfd失败");
 		return;
 	}
 
 	// 开始连接
-	//_currentEventData->conn->is_client = true;
 	mg_resolve(_currentEventData->conn, url);
 #endif
 
@@ -794,7 +791,7 @@ void CMongooseExample_MFCDlg::OnBtnDisconnectServer()
 	}
 
 	// 关闭事件循环
-	_isNeedClose = true;
+	_isNeedDeleteMgr = true;
 }
 
 void CMongooseExample_MFCDlg::OnBtnSendMsg()
@@ -914,13 +911,13 @@ void OnUDPEvent(mg_connection* conn, int ev, void* ev_data, void* fn_data)
 
 void CMongooseExample_MFCDlg::OnBtnUdpBind()
 {
-	_isNeedClose = false;
+	_isNeedDeleteMgr = false;
 
 	mg_mgr* mgr = new mg_mgr;
 	mg_mgr_init(mgr);
 	thread([&, mgr]
 	{
-		while (!_isNeedClose)
+		while (!_isNeedDeleteMgr)
 		{
 			mg_mgr_poll(mgr, 1000);
 		}
@@ -945,7 +942,7 @@ void CMongooseExample_MFCDlg::OnBtnUdpBind()
 	if (!_listenEventData->conn)
 	{
 		AppendMsg(L"UDP开始监听失败");
-		_isNeedClose = true;
+		_isNeedDeleteMgr = true;
 	}
 }
 
@@ -956,7 +953,7 @@ void CMongooseExample_MFCDlg::OnBtnUdpSendMsg()
 	const int remotePort = _wtoi(tmpStr);
 
 	sockaddr_in remoteAddr = { 0 };
-	if (!ConvertIPPort(DEFAULT_SOCKET_IP, remotePort, remoteAddr))
+	if (!ConvertIPPort("0.0.0.0", remotePort, remoteAddr))
 	{
 		AppendMsg(L"IP地址无效");
 	}
@@ -984,7 +981,7 @@ void CMongooseExample_MFCDlg::OnBtnUdpClose()
 	}
 
 	// 关闭事件循环
-	_isNeedClose = true;
+	_isNeedDeleteMgr = true;
 }
 
 // static void OnHTTP_API_getA(evhttp_request* req, void* arg)
