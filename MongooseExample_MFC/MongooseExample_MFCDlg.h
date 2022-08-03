@@ -30,7 +30,6 @@ protected:
 	HICON m_hIcon;
 
 	virtual BOOL OnInitDialog();
-	afx_msg void OnPaint();
 	afx_msg HCURSOR OnQueryDragIcon();
 	DECLARE_MESSAGE_MAP()
 
@@ -62,7 +61,8 @@ public:
 	void AppendMsg(const WCHAR* msg);
 	bool IsUseSSL();
 	void OnTCPAccept(shared_ptr<EventData> eventData); // 与服务端建立连接
-	void OnTCPDisconnect(mg_connection* conn);
+	void OnDisconnectClient(mg_connection* conn);
+	void OnDisconnectServer();
 private:
 	afx_msg void OnBtnDisconnClient();
 	afx_msg void OnBtnListen();

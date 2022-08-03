@@ -65,8 +65,6 @@ public:
 
 	CMongooseExample_MFCDlg* dlg = nullptr;
 	mg_connection* conn = nullptr;
-	ssl_ctx_st* ssl_ctx = nullptr;
-	ssl_st* ssl = nullptr;
 };
 
 // struct HttpData
@@ -137,7 +135,6 @@ void CMongooseExample_MFCDlg::DoDataExchange(CDataExchange* pDX)
 }
 
 BEGIN_MESSAGE_MAP(CMongooseExample_MFCDlg, CDialogEx)
-	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
 	ON_MESSAGE(WMSG_FUNCTION, &CMongooseExample_MFCDlg::OnFunction)
 	ON_BN_CLICKED(IDC_BUTTON_DISCONN_CLIENT, &CMongooseExample_MFCDlg::OnBtnDisconnClient)
@@ -185,31 +182,6 @@ BOOL CMongooseExample_MFCDlg::OnInitDialog()
 
 		AppendMsg(L"启动 Mongoose is not thread-safe");
 		return TRUE;
-}
-
-void CMongooseExample_MFCDlg::OnPaint()
-{
-	if (IsIconic())
-	{
-		CPaintDC dc(this); // 用于绘制的设备上下文
-
-		SendMessage(WM_ICONERASEBKGND, reinterpret_cast<WPARAM>(dc.GetSafeHdc()), 0);
-
-		// 使图标在工作区矩形中居中
-		int cxIcon = GetSystemMetrics(SM_CXICON);
-		int cyIcon = GetSystemMetrics(SM_CYICON);
-		CRect rect;
-		GetClientRect(&rect);
-		int x = (rect.Width() - cxIcon + 1) / 2;
-		int y = (rect.Height() - cyIcon + 1) / 2;
-
-		// 绘制图标
-		dc.DrawIcon(x, y, m_hIcon);
-	}
-	else
-	{
-		CDialogEx::OnPaint();
-	}
 }
 
 HCURSOR CMongooseExample_MFCDlg::OnQueryDragIcon()
@@ -262,12 +234,17 @@ void CMongooseExample_MFCDlg::OnTCPAccept(shared_ptr<EventData> eventData)
 	_currentEventData = eventData;
 }
 
-void CMongooseExample_MFCDlg::OnTCPDisconnect(mg_connection* conn)
+void CMongooseExample_MFCDlg::OnDisconnectClient(mg_connection* conn)
 {
 	if (_currentEventData && _currentEventData->conn == conn)
 	{
 		_currentEventData = nullptr;
 	}
+}
+
+void CMongooseExample_MFCDlg::OnDisconnectServer()
+{
+	_isNeedClose = true;
 }
 
 LRESULT CMongooseExample_MFCDlg::OnFunction(WPARAM wParam, LPARAM lParam)
@@ -432,7 +409,7 @@ void OnTCPServerEvent(mg_connection* conn, int ev, void* ev_data, void* fn_data)
 	case MG_EV_OPEN:
 	{
 		CString tmpStr;
-		tmpStr.Format(L"TCP服务端连接已准备 remote:%s local:%s", GenerateIPPortString(conn->rem), GenerateIPPortString(conn->loc));
+		tmpStr.Format(L"TCP服务端连接已准备 local:%s", GenerateIPPortString(conn->loc));
 		listenEventData->dlg->AppendMsg(tmpStr);
 		break;
 	}
@@ -469,6 +446,18 @@ void OnTCPServerEvent(mg_connection* conn, int ev, void* ev_data, void* fn_data)
 			return;
 		}
 
+		if (listenEventData->dlg->IsUseSSL())
+		{
+			CString exeDir = GetModuleDir();
+			string serverCrtPath = UnicodeToUTF8(CombinePath(exeDir, L"../3rd/OpenSSL/server.crt"));
+			string serverKeyPath = UnicodeToUTF8(CombinePath(exeDir, L"../3rd/OpenSSL/server.key"));
+			mg_tls_opts tlsOpts;
+			memset(&tlsOpts, 0, sizeof(mg_tls_opts));
+			tlsOpts.cert = serverCrtPath.c_str();
+			tlsOpts.certkey = serverKeyPath.c_str();
+			mg_tls_init(conn, &tlsOpts);
+		}
+
 		shared_ptr<EventData> eventData = make_shared<EventData>(listenEventData->dlg);
 		eventData->conn = conn;
 		listenEventData->dlg->OnTCPAccept(eventData);
@@ -480,7 +469,7 @@ void OnTCPServerEvent(mg_connection* conn, int ev, void* ev_data, void* fn_data)
 		tmpStr.Format(L"与客户端%s的连接断开", GenerateIPPortString(conn->rem));
 		listenEventData->dlg->AppendMsg(tmpStr);
 
-		listenEventData->dlg->OnTCPDisconnect(conn);
+		listenEventData->dlg->OnDisconnectClient(conn);
 	}
 	break;
 	case MG_EV_READ:
@@ -539,109 +528,13 @@ void CMongooseExample_MFCDlg::OnBtnListen()
 	strLog.Format(L"TCP开始监听：%s", S2Unicode(url).c_str());
 	AppendMsg(strLog);
 	_listenEventData = make_shared<EventData>(this);
+
 	_listenEventData->conn = mg_listen(mgr, url, OnTCPServerEvent, _listenEventData.get());
 	if (!_listenEventData->conn)
 	{
 		AppendMsg(L"TCP开始监听失败");
 		_isNeedClose = true;
 	}
-
-	// 	event_config* cfg = event_config_new();
-	// 	evthread_use_windows_threads();
-	// 	event_config_set_num_cpus_hint(cfg, 8);
-	// 	event_config_set_flag(cfg, EVENT_BASE_FLAG_STARTUP_IOCP);
-	// 
-	// 	event_base* eventBase = event_base_new_with_config(cfg);
-	// 	if (!eventBase)
-	// 	{
-	// 		event_config_free(cfg);
-	// 		AppendMsg(L"创建eventBase失败");
-	// 		return;
-	// 	}
-	// 	event_config_free(cfg);
-	// 	cfg = nullptr;
-	// 
-	// 	//创建、绑定、监听socket
-	// 	CString tmpStr;
-	// 	_editPort.GetWindowText(tmpStr);
-	// 	const int port = _wtoi(tmpStr);
-	// 
-	// 	sockaddr_in localAddr = {0};
-	// 	localAddr.sin_family = AF_INET;
-	// 	localAddr.sin_port = htons(port);
-	// 
-	// 	EventData* eventData = new EventData;
-	// 	eventData->dlg = this;
-	// 
-	// 	if (IsUseSSL())
-	// 	{
-	// 		/*
-	// 			生成x.509证书
-	// 			首选在安装好openssl的机器上创建私钥文件：server.key
-	// 			> openssl genrsa -out server.key 2048
-	// 			
-	// 			得到私钥文件后我们需要一个证书请求文件：server.csr，将来你可以拿这个证书请求向正规的证书管理机构申请证书			
-	// 			> openssl req -new -key server.key -out server.csr
-	// 			
-	// 			最后我们生成自签名的x.509证书（有效期365天）：server.crt			
-	// 			> openssl x509 -req -days 365 -in server.csr -signkey server.key -out server.crt
-	// 		*/
-	// 		CString exeDir = GetModuleDir();
-	// 		CString serverCrtPath = CombinePath(exeDir, L"../3rd/OpenSSL/server.crt");
-	// 		CString serverKeyPath = CombinePath(exeDir, L"../3rd/OpenSSL/server.key");
-	// 
-	// 		// 引入之前生成好的私钥文件和证书文件
-	// 		ssl_ctx_st* ssl_ctx = SSL_CTX_new(TLS_server_method());
-	// 		if (!ssl_ctx)
-	// 		{
-	// 			AppendMsg(L"ssl_ctx new failed");
-	// 			return;
-	// 		}
-	// 		int res = SSL_CTX_use_certificate_file(ssl_ctx, UnicodeToUTF8(serverCrtPath).c_str(), SSL_FILETYPE_PEM);
-	// 		if (res != 1)
-	// 		{
-	// 			AppendMsg(L"SSL_CTX_use_certificate_file failed");
-	// 			return;
-	// 		}
-	// 		res = SSL_CTX_use_PrivateKey_file(ssl_ctx, UnicodeToUTF8(serverKeyPath).c_str(), SSL_FILETYPE_PEM);
-	// 		if (res != 1)
-	// 		{
-	// 			AppendMsg(L"SSL_CTX_use_PrivateKey_file failed");
-	// 			return;
-	// 		}
-	// 		res = SSL_CTX_check_private_key(ssl_ctx);
-	// 		if (res != 1)
-	// 		{
-	// 			AppendMsg(L"SSL_CTX_check_private_key failed");
-	// 			return;
-	// 		}
-	// 
-	// 		eventData->ssl_ctx = ssl_ctx;
-	// 	}
-	// 
-	// 	_listener = evconnlistener_new_bind(eventBase, OnServerEventAccept, eventData,
-	// 		LEV_OPT_REUSEABLE | LEV_OPT_CLOSE_ON_FREE, -1,
-	// 		(sockaddr*)&localAddr, sizeof(localAddr));
-	// 	if (!_listener)
-	// 	{
-	// 		AppendMsg(L"创建evconnlistener失败");
-	// 				
-	// 		event_base_free(eventBase);
-	// 		delete eventData;
-	// 		return;
-	// 	}
-	// 	_currentEventData = eventData;
-	// 
-	// 	thread([&, eventBase]
-	// 	{
-	// 		event_base_dispatch(eventBase); // 阻塞
-	// 		AppendMsg(L"服务端socket event_base_dispatch线程 结束");
-	// 	
-	// 		evconnlistener_free(_listener);
-	// 		delete _currentEventData;
-	// 		_currentEventData = nullptr;
-	// 		event_base_free(eventBase);		
-	// 	}).detach();
 }
 
 void CMongooseExample_MFCDlg::OnBtnStopListen()
@@ -753,7 +646,7 @@ void OnTCPClientEvent(mg_connection* conn, int ev, void* ev_data, void* fn_data)
 		tmpStr.Format(L"与服务端remote:%s连接断开 local:%s", GenerateIPPortString(conn->rem), GenerateIPPortString(conn->loc));
 		eventData->dlg->AppendMsg(tmpStr);
 
-		eventData->dlg->OnTCPDisconnect(conn);
+		eventData->dlg->OnDisconnectServer();
 	}
 	break;
 	case MG_EV_READ:
@@ -819,7 +712,7 @@ void CMongooseExample_MFCDlg::OnBtnConnect()
 		AppendMsg(L"TCP客户端事件循环结束");
 	}).detach();
 
-	shared_ptr<EventData> eventData = make_shared<EventData>(this);
+	_currentEventData = make_shared<EventData>(this);
 #ifdef _USE_RANDOM_LOCALPORT
 		// 使用任意本地端口连接服务端
 	CStringA url;
@@ -827,7 +720,20 @@ void CMongooseExample_MFCDlg::OnBtnConnect()
 	CString strLog;
 	strLog.Format(L"开始连接服务端：%s", S2Unicode(url).c_str());
 	AppendMsg(strLog);
-	eventData->conn = mg_connect(mgr, url, OnTCPClientEvent, this);
+	_currentEventData->conn = mg_connect(mgr, url, OnTCPClientEvent, _currentEventData.get());
+	if (nullptr == _currentEventData->conn)
+	{
+		_isNeedClose = true;
+		AppendMsg(L"mg_connect失败");
+		return;
+	}
+
+	if (IsUseSSL())
+	{
+		mg_tls_opts tlsOpts;
+		memset(&tlsOpts, 0, sizeof(mg_tls_opts));
+		mg_tls_init(_currentEventData->conn, &tlsOpts);
+	}
 #else
 	SOCKET sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	// 修改socket属性
@@ -861,6 +767,24 @@ void CMongooseExample_MFCDlg::OnBtnConnect()
 		return;
 	}
 
+	_currentEventData->conn = mg_wrapfd(mgr, sockfd, OnTCPClientEvent, _currentEventData.get());
+	if (nullptr == _currentEventData->conn)
+	{
+		_isNeedClose = true;
+		::closesocket(sockfd);
+		AppendMsg(L"mg_wrapfd失败");
+		return;
+	}
+
+	_currentEventData->conn->is_client = true;
+	_currentEventData->conn->is_connecting = true;
+	if (IsUseSSL())
+	{
+		mg_tls_opts tlsOpts;
+		memset(&tlsOpts, 0, sizeof(mg_tls_opts));
+		mg_tls_init(_currentEventData->conn, &tlsOpts);
+	}
+
 	if (0 != ::connect(sockfd, (sockaddr*)&remoteAddr, sizeof(sockaddr)))
 	{
 		_isNeedClose = true;
@@ -869,20 +793,13 @@ void CMongooseExample_MFCDlg::OnBtnConnect()
 		return;
 	}
 
-	eventData->conn = mg_wrapfd(mgr, sockfd, OnTCPClientEvent, eventData.get());
-	if (nullptr == eventData->conn)
-	{
-		_isNeedClose = true;
-		::closesocket(sockfd);
-		AppendMsg(L"mg_wrapfd失败");
-		return;
-	}
-#endif
-
-	_currentEventData = eventData;
-
 	tmpStr.Format(L"与服务端remote:%s:%d连接成功 local:%s:%d", S2Unicode(DEFAULT_SOCKET_IP).c_str(), remotePort, S2Unicode(DEFAULT_SOCKET_IP).c_str(), localPort);
 	AppendMsg(tmpStr);
+
+	
+#endif
+
+	//eventData->conn->is_client = true;
 }
 
 void CMongooseExample_MFCDlg::OnBtnDisconnectServer()
@@ -972,14 +889,6 @@ void OnUDPEvent(mg_connection* conn, int ev, void* ev_data, void* fn_data)
 	break;
 	case MG_EV_POLL:
 		break;
-	case MG_EV_OPEN:
-	{
-		CString tmpStr;
-		tmpStr.Format(L"UDP已准备 remote:%s local:%s", GenerateIPPortString(conn->rem), GenerateIPPortString(conn->loc));
-		listenEventData->dlg->AppendMsg(tmpStr);
-		break;
-	}
-	break;
 	case MG_EV_RESOLVE:
 	{
 		CString tmpStr;
@@ -989,11 +898,8 @@ void OnUDPEvent(mg_connection* conn, int ev, void* ev_data, void* fn_data)
 	break;
 	case MG_EV_CLOSE:
 	{
-		CString tmpStr;
-		tmpStr.Format(L"与客户端%s的连接断开", GenerateIPPortString(conn->rem));
-		listenEventData->dlg->AppendMsg(tmpStr);
-
-		listenEventData->dlg->OnTCPDisconnect(conn);
+		listenEventData->dlg->AppendMsg(L"UDP监听停止");
+		listenEventData->dlg->OnDisconnectServer();
 	}
 	break;
 	case MG_EV_READ:
