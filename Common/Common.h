@@ -17,6 +17,7 @@ string UnicodeToMB(const CStringW& unicodeStr);
 void ConvertIPPort(const SOCKADDR_IN& addr, string& ip, int& port); // 网络字节顺序转本地字节顺序
 bool ConvertIPPort(const string& ip, int port, SOCKADDR_IN& addr);	// 本地字节顺序转网络字节顺序
 void ConvertIPPort(DWORD ip, int port, SOCKADDR_IN& addr);	// 本地字节顺序转网络字节顺序
+void ConvertIPLocal2Local(const ULONG lIP, string& strIP);// 本地字节顺序转本地字节顺序string
 void ConvertIPNet2Local(const ULONG nIP, string& strIP);// 网络字节顺序转本地字节顺序string
 
 CString GetModuleDir();

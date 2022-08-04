@@ -183,6 +183,17 @@ void ConvertIPPort(DWORD ip, int port, SOCKADDR_IN& addr)
 	addr.sin_port = htons(port);
 }
 
+void ConvertIPLocal2Local(const ULONG lIP, string& strIP)
+{
+	char charBuf[16] = { 0 };
+	sprintf_s(charBuf, "%u.%u.%u.%u",
+		(unsigned char)*((char*)&lIP + 3),
+		(unsigned char)*((char*)&lIP + 2),
+		(unsigned char)*((char*)&lIP + 1),
+		(unsigned char)*((char*)&lIP + 0));
+	strIP = charBuf;
+}
+
 void ConvertIPNet2Local(const ULONG nIP, string& strIP)
 {
 	char charBuf[16] = { 0 };

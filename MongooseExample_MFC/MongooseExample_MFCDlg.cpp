@@ -277,120 +277,6 @@ void CMongooseExample_MFCDlg::OnBtnDisconnClient()
 	}
 }
 
-// static void OnServerWrite(bufferevent* bev, void* param)
-// {
-// 	EventData* eventData = (EventData*)param;
-// 
-// 	eventData->dlg->AppendMsg(L"OnServerWrite");
-// }
-
-// static void OnServerRead(bufferevent* bev, void* param)
-// {
-// 	EventData* eventData = (EventData*)param;
-// 
-// 	evbuffer* input = bufferevent_get_input(bev);
-// 	size_t sz = evbuffer_get_length(input);
-// 	if (sz > 0)
-// 	{
-// 		char* buffer = new char[sz]{0};
-// 		bufferevent_read(bev, buffer, sz);
-// 
-// 		CString tmpStr;
-// 		tmpStr.Format(L"threadID:%d 收到%u字节", this_thread::get_id(), sz);
-// 		eventData->dlg->AppendMsg(tmpStr);		
-// 
-// 		delete[] buffer;
-// 	}
-// }
-
-// static void OnServerEvent(bufferevent* bev, short events, void* param)
-// {
-// 	EventData* eventData = (EventData*)param;
-// 
-// 	if (events & BEV_EVENT_EOF) 
-// 	{
-// 		eventData->dlg->AppendMsg(L"BEV_EVENT_EOF 连接关闭");
-// 		if (eventData->ssl)
-// 		{
-// 			SSL_shutdown(eventData->ssl);
-// 		}
-// 	}
-// 	else if (events & BEV_EVENT_ERROR)
-// 	{
-// 		CString tmpStr;
-// 		if (events & BEV_EVENT_READING)
-// 		{
-// 			tmpStr.Format(L"BEV_EVENT_ERROR BEV_EVENT_READING错误errno:%d", errno);
-// 		}
-// 		else if (events & BEV_EVENT_WRITING)
-// 		{
-// 			tmpStr.Format(L"BEV_EVENT_ERROR BEV_EVENT_WRITING错误errno:%d", errno);
-// 		}
-// 	
-// 		eventData->dlg->AppendMsg(tmpStr);
-// 	}
-// }
-
-// static void OnServerEventAccept(evconnlistener* listener, evutil_socket_t fd, sockaddr* sa, int socklen, void* param)
-// {
-// 	EventData* eventData = (EventData*)param;
-// 	event_base* eventBase = evconnlistener_get_base(listener);
-// 
-// 	int bufLen = SINGLE_PACKAGE_SIZE;
-// 	int ret = setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (const char*)&bufLen, sizeof(int));
-// 	ret = setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (const char*)&bufLen, sizeof(int));
-// 	linger l;
-// 	l.l_onoff = 1;
-// 	l.l_linger = 0;
-// 	ret = setsockopt(fd, SOL_SOCKET, SO_LINGER, (const char*)&l, sizeof(l));
-// 
-// 	//构造一个bufferevent
-// 	bufferevent* bev = nullptr;
-// 	if (eventData->dlg->IsUseSSL())
-// 	{
-// 		// bufferevent_openssl_socket_new方法包含了对bufferevent和SSL的管理，因此当连接关闭的时候不再需要SSL_free
-// 		eventData->ssl = SSL_new(eventData->ssl_ctx);
-// 		SSL_set_fd(eventData->ssl, fd);
-// 		bev = bufferevent_openssl_socket_new(eventBase, fd, eventData->ssl, BUFFEREVENT_SSL_ACCEPTING, BEV_OPT_CLOSE_ON_FREE);
-// 	}
-// 	else
-// 	{
-// 		bev = bufferevent_socket_new(eventBase, fd, BEV_OPT_CLOSE_ON_FREE);
-// 	}
-// 
-// 	if (!bev) 
-// 	{
-// 		eventData->dlg->AppendMsg(L"bufferevent_socket_new失败");
-// 		event_base_loopbreak(eventBase);
-// 		return;
-// 	}
-// 	eventData->bev = bev;
-// 
-// 	// 修改读写上限
-// 	ret = bufferevent_set_max_single_read(bev, SINGLE_PACKAGE_SIZE);
-// 	if (ret != 0)
-// 	{
-// 		eventData->dlg->AppendMsg(L"bufferevent_set_max_single_read失败");
-// 	}
-// 	ret = bufferevent_set_max_single_write(bev, SINGLE_PACKAGE_SIZE);
-// 	if (ret != 0)
-// 	{
-// 		eventData->dlg->AppendMsg(L"bufferevent_set_max_single_write失败");
-// 	}
-// 
-// 	//绑定读事件回调函数、写事件回调函数、错误事件回调函数
-// 	bufferevent_setcb(bev, OnServerRead, OnServerWrite, OnServerEvent, eventData);
-// 
-// 	bufferevent_enable(bev, EV_READ | EV_WRITE);
-// 
-// 	string remoteIP;
-// 	int remotePort;
-// 	ConvertIPPort(*(sockaddr_in*)sa, remoteIP, remotePort);
-// 	CString tmpStr;
-// 	tmpStr.Format(L"threadID:%d 新客户端%s:%d 连接", this_thread::get_id(), S2Unicode(remoteIP).c_str(), remotePort);
-// 	eventData->dlg->AppendMsg(tmpStr);
-// }
-
 void OnTCPServerEvent(mg_connection* conn, int ev, void* ev_data, void* fn_data)
 {
 	EventData* listenEventData = (EventData*)fn_data;
@@ -412,7 +298,6 @@ void OnTCPServerEvent(mg_connection* conn, int ev, void* ev_data, void* fn_data)
 		CString tmpStr;
 		tmpStr.Format(L"TCP服务端连接已准备 local:%s", GenerateIPPortString(conn->loc));
 		listenEventData->dlg->AppendMsg(tmpStr);
-		break;
 	}
 	break;
 	case MG_EV_RESOLVE:
@@ -496,7 +381,7 @@ void OnTCPServerEvent(mg_connection* conn, int ev, void* ev_data, void* fn_data)
 	}
 	break;
 	default:
-		listenEventData->dlg->AppendMsg(L"OnTCPEvent default");
+		listenEventData->dlg->AppendMsg(L"OnTCPServerEvent default");
 		break;
 	}
 }
@@ -549,59 +434,6 @@ void CMongooseExample_MFCDlg::OnBtnStopListen()
 	// 关闭事件循环
 	_isNeedDeleteMgr = true;
 }
-
-// static void OnClientWrite(bufferevent* bev, void* param)
-// {
-// 	EventData* eventData = (EventData*)param;
-// 
-// 	eventData->dlg->AppendMsg(L"OnClientWrite");
-// }
-
-// static void OnClientRead(bufferevent* bev, void* param)
-// {
-// 	EventData* eventData = (EventData*)param;
-// 
-// 	evbuffer* input = bufferevent_get_input(bev);
-// 	size_t sz = evbuffer_get_length(input);
-// 	if (sz > 0)
-// 	{
-// 		char* buffer = new char[sz] {0};
-// 		bufferevent_read(bev, buffer, sz);
-// 
-// 		CString tmpStr;
-// 		tmpStr.Format(L"threadID:%d 收到%u字节", this_thread::get_id(), sz);
-// 		eventData->dlg->AppendMsg(tmpStr);
-// 
-// 		delete[] buffer;
-// 	}
-// }
-
-// static void OnClientEvent(bufferevent* bev, short events, void* param)
-// {
-// 	EventData* eventData = (EventData*)param;
-// 
-// 	if (events & BEV_EVENT_CONNECTED)
-// 	{
-// 		eventData->dlg->AppendMsg(L"连接服务端成功");
-// 	}
-// 	else if (events & BEV_EVENT_EOF) 
-// 	{
-// 		eventData->dlg->AppendMsg(L"BEV_EVENT_EOF 连接关闭");
-// 	}
-// 	else if (events & BEV_EVENT_ERROR)
-// 	{
-// 		CString tmpStr;
-// 		if (events & BEV_EVENT_READING)
-// 		{
-// 			tmpStr.Format(L"BEV_EVENT_ERROR BEV_EVENT_READING错误errno:%d", errno);
-// 		}
-// 		else if (events & BEV_EVENT_WRITING)
-// 		{
-// 			tmpStr.Format(L"BEV_EVENT_ERROR BEV_EVENT_WRITING错误errno:%d", errno);
-// 		}
-// 		eventData->dlg->AppendMsg(tmpStr);
-// 	}
-// }
 
 void OnTCPClientEvent(mg_connection* conn, int ev, void* ev_data, void* fn_data)
 {
@@ -686,11 +518,11 @@ void CMongooseExample_MFCDlg::OnBtnConnect()
 	CString tmpStr;
 	DWORD dwRemoteIP;
 	_ipRemote.GetAddress(dwRemoteIP);
+	string remoteIP;
+	ConvertIPLocal2Local(dwRemoteIP, remoteIP);
 
 	_editRemotePort.GetWindowText(tmpStr);
 	const int remotePort = _wtoi(tmpStr);
-	SOCKADDR_IN remoteAddr;
-	ConvertIPPort(dwRemoteIP, remotePort, remoteAddr);
 
 	mg_mgr* mgr = new mg_mgr;
 	mg_mgr_init(mgr);
@@ -706,7 +538,7 @@ void CMongooseExample_MFCDlg::OnBtnConnect()
 	}).detach();
 
 	CStringA url;
-	url.Format("tcp://127.0.0.1:%d", remotePort);
+	url.Format("tcp://%s:%d", remoteIP.c_str(), remotePort);
 	CString strLog;
 	strLog.Format(L"开始连接服务端：%s", S2Unicode(url).c_str());
 	AppendMsg(strLog);
@@ -991,428 +823,136 @@ void CMongooseExample_MFCDlg::OnBtnUdpClose()
 	_isNeedDeleteMgr = true;
 }
 
-// static void OnHTTP_API_getA(evhttp_request* req, void* arg)
-// {
-// 	CMongooseExample_MFCDlg* dlg = (CMongooseExample_MFCDlg*)arg;
-// 	// http://127.0.0.1:23300/api/getA?q=test&s=some+thing
-// 
-// 	const evhttp_uri* evURI = evhttp_request_get_evhttp_uri(req);	
-// 	const char* uri = evhttp_request_get_uri(req);// 获取请求uri "/api/getA?q=test&s=some+thing"
-// 	//evhttp_uri* evURI = evhttp_uri_parse(uri);// 解码uri
-// 	if (!evURI)
-// 	{
-// 		evhttp_send_error(req, HTTP_BADREQUEST, NULL);
-// 		return;
-// 	}
-// // 	char uri[URL_MAX] = {0};
-// // 	evhttp_uri_join((evhttp_uri*)evURI, uri, URL_MAX);// 获取请求uri "/api/getA?q=test&s=some+thing"
-// 
-// 	const char* path = evhttp_uri_get_path(evURI); // 获取uri中的path部分 "/api/getA"
-// 	if (!path)
-// 	{
-// 		path = "/";
-// 	}
-// 
-// 	const char* query = evhttp_uri_get_query(evURI); // 获取uri中的参数部分 "q=test&s=some+thing"
-// 	const char* scheme = evhttp_uri_get_scheme(evURI); // nullptr
-// 	const char* fragment = evhttp_uri_get_fragment(evURI); // nullptr
-// 
-// 	// 查询指定参数的值
-// 	evkeyvalq params = { 0 };
-// 	evhttp_parse_query_str(query, &params);
-// 	const char* value = evhttp_find_header(&params, "s"); // "some thing"
-// 	value = evhttp_find_header(&params, "q"); // "test"
-// 
-// 	// 回复
-// 	evbuffer_add_printf(req->output_buffer, UnicodeToUTF8(L"谢谢！Thanks use getA").c_str());
-// 	//evbuffer_add(req->output_buffer, s, strlen(s));
-// 	evhttp_send_reply(req, HTTP_OK, "OK", nullptr);
-// 
-// 	CString strMsg;
-// 	strMsg.Format(L"收到%s:%d PutA接口请求", CString(req->remote_host), req->remote_port);
-// 	dlg->AppendMsg(strMsg);
-// }
+static void OnHTTPServerEvent(struct mg_connection* conn, int ev, void* ev_data, void* fn_data) 
+{
+	EventData* listenEventData = (EventData*)fn_data;
+	CString tmpStr;
 
-// static void OnHTTP_API_postA(evhttp_request* req, void* arg)
-// {
-// 	CMongooseExample_MFCDlg* dlg = (CMongooseExample_MFCDlg*)arg;
-// 	// http://127.0.0.1:23300/api/postA?q=test&s=some+thing
-// 
-// 	const evhttp_uri* evURI = evhttp_request_get_evhttp_uri(req);
-// 	const char* uri = evhttp_request_get_uri(req);// 获取请求uri "/api/postA?q=test&s=some+thing"
-// 	//evhttp_uri* evURI = evhttp_uri_parse(uri);// 解码uri
-// 	if (!evURI)
-// 	{
-// 		evhttp_send_error(req, HTTP_BADREQUEST, NULL);
-// 		return;
-// 	}
-// 	// 	char uri[URL_MAX] = {0};
-// 	// 	evhttp_uri_join((evhttp_uri*)evURI, uri, URL_MAX);// 获取请求uri "/api/posttA?q=test&s=some+thing"
-// 
-// 	const char* path = evhttp_uri_get_path(evURI); // 获取uri中的path部分 "/api/postA"
-// 	if (!path)
-// 	{
-// 		path = "/";
-// 	}
-// 
-// 	const char* query = evhttp_uri_get_query(evURI); // 获取uri中的参数部分 "q=test&s=some+thing"
-// 	const char* fragment = evhttp_uri_get_fragment(evURI);
-// 
-// 	// 查询指定参数的值
-// 	evkeyvalq params = { 0 };
-// 	evhttp_parse_query_str(query, &params);
-// 	const char* value = evhttp_find_header(&params, "s"); // "some thing"
-// 	value = evhttp_find_header(&params, "q"); // "test"
-// 
-// 	// 获取Headers
-// 	evkeyvalq* headers = evhttp_request_get_input_headers(req);
-// 	value = evhttp_find_header(headers, "Host");
-// 	value = evhttp_find_header(headers, "BodySize");
-// 	size_t bodySize = atoi(value);
-// 
-// 	// 获取数据长度
-// 	size_t len = evbuffer_get_length(req->input_buffer);
-// 	if (len != bodySize)
-// 	{
-// 		evhttp_send_reply(req, HTTP_NOCONTENT, "wrong bodySize", nullptr);
-// 		CString strMsg;
-// 		strMsg.Format(L"bodySize:%u 但实际收到PostA接口%u字节数据", bodySize, len);
-// 		dlg->AppendMsg(strMsg);
-// 		return;
-// 	}
-// 
-// 	if (len > 0)
-// 	{
-// 		// 获取数据指针
-// 		unsigned char* data = evbuffer_pullup(req->input_buffer, len);
-// 
-// 		// 处理数据...
-// 
-// 		// 清空数据
-// 		evbuffer_drain(req->input_buffer, len);
-// 	}
-// 
-// 	// 模拟时延/超时
-// 	//this_thread::sleep_for(chrono::seconds(5));
-// 
-// 	// 回复
-// 	const size_t bufSize = 65535 * 10;
-// 	char* postBuf = new char[bufSize] {'B'};
-// 	evbuffer_add(req->output_buffer, postBuf, bufSize);
-// 	delete[] postBuf;
-// 	evhttp_send_reply(req, HTTP_OK, nullptr, nullptr);
-// 
-// 	CString strMsg;
-// 	strMsg.Format(L"收到PostA接口%u字节数据", len);
-// 	dlg->AppendMsg(strMsg);
-// }
+	switch (ev)
+	{
+	case MG_EV_ERROR:
+	case MG_EV_OPEN:
+	case MG_EV_POLL:
+		break;
+	case MG_EV_ACCEPT:
+	{
+		if (listenEventData->dlg->IsUseSSL())
+		{
+			CString exeDir = GetModuleDir();
+			string serverCrtPath = UnicodeToUTF8(CombinePath(exeDir, L"../3rd/OpenSSL/server.crt"));
+			string serverKeyPath = UnicodeToUTF8(CombinePath(exeDir, L"../3rd/OpenSSL/server.key"));
+			mg_tls_opts tlsOpts;
+			memset(&tlsOpts, 0, sizeof(mg_tls_opts));
+			tlsOpts.cert = serverCrtPath.c_str();
+			tlsOpts.certkey = serverKeyPath.c_str();
+			mg_tls_init(conn, &tlsOpts);
+		}
+	}
+	break;
+	case MG_EV_READ:
+	case MG_EV_WRITE:
+	case MG_EV_CLOSE:
+		break;
+	case MG_EV_HTTP_MSG:
+	{
+		mg_http_message* hm = (mg_http_message*)ev_data;
+		if (mg_http_match_uri(hm, "/api/getA"))
+		{
+			mg_http_reply(conn, 200, "", "{\"result\": \"%.*s\"}\n", (int)hm->uri.len, hm->uri.ptr);
+		} 
+		else if (mg_http_match_uri(hm, "/api/postA"))
+		{
+			mg_http_reply(conn, 200, "", "{\"result\": \"%.*s\"}\n", (int)hm->uri.len, hm->uri.ptr);
+		}
 
-// static void OnHTTP_API_postFileA(evhttp_request* req, void* arg)
-// {
-// 	CMongooseExample_MFCDlg* dlg = (CMongooseExample_MFCDlg*)arg;
-// 	// http://127.0.0.1:23300/api/postFileA?q=test&s=some+thing
-// 
-// 	const evhttp_uri* evURI = evhttp_request_get_evhttp_uri(req);
-// 	const char* uri = evhttp_request_get_uri(req);// 获取请求uri "/api/postFileA?q=test&s=some+thing"
-// 	//evhttp_uri* evURI = evhttp_uri_parse(uri);// 解码uri
-// 	if (!evURI)
-// 	{
-// 		evhttp_send_error(req, HTTP_BADREQUEST, NULL);
-// 		return;
-// 	}
-// 	// 	char uri[URL_MAX] = {0};
-// 	// 	evhttp_uri_join((evhttp_uri*)evURI, uri, URL_MAX);// 获取请求uri "/api/postFileA?q=test&s=some+thing"
-// 
-// 	const char* path = evhttp_uri_get_path(evURI); // 获取uri中的path部分 "/api/postFileA"
-// 	if (!path)
-// 	{
-// 		path = "/";
-// 	}
-// 
-// 	const char* query = evhttp_uri_get_query(evURI); // 获取uri中的参数部分 "q=test&s=some+thing"
-// 	const char* fragment = evhttp_uri_get_fragment(evURI);
-// 
-// 	// 查询指定参数的值
-// 	evkeyvalq params = { 0 };
-// 	evhttp_parse_query_str(query, &params);
-// 	const char* value = evhttp_find_header(&params, "s"); // "some thing"
-// 	value = evhttp_find_header(&params, "q"); // "test"
-// 
-// 	// 获取Headers
-// 	evkeyvalq* headers = evhttp_request_get_input_headers(req);
-// 	value = evhttp_find_header(headers, "FileSize");
-// 	size_t fileSize = atoi(value);
-// 	wstring fileName = UTF8ToUnicode(evhttp_find_header(headers, "FileName"));
-// 
-// 	// 获取数据长度
-// 	size_t len = evbuffer_get_length(req->input_buffer);
-//  	if (len != fileSize)
-//  	{
-//  		evhttp_send_reply(req, HTTP_NOCONTENT, "wrong bodySize", nullptr);
-//  		CString strMsg;
-//  		strMsg.Format(L"fileName:%s fileSize:%u 但实际收到PostFileA接口%u字节数据", fileName.c_str(), fileSize, len);
-//  		dlg->AppendMsg(strMsg);
-//  		return;
-//  	}
-// 
-// 	if (len > 0)
-// 	{
-// 		// 获取数据指针
-// 		unsigned char* data = evbuffer_pullup(req->input_buffer, len);
-// 
-// 		// 处理数据...
-// 
-// 		// 清空数据
-// 		evbuffer_drain(req->input_buffer, len);
-// 	}
-// 
-// 	// 模拟时延/超时
-// 	//this_thread::sleep_for(chrono::seconds(5));
-// 
-// 	// 回复
-// 	const size_t bufSize = 65535 * 10;
-// 	char* postBuf = new char[bufSize] {'B'};
-// 	evbuffer_add(req->output_buffer, postBuf, bufSize);
-// 	delete[] postBuf;
-// 	evhttp_send_reply(req, HTTP_OK, nullptr, nullptr);
-// 
-// 	CString strMsg;
-// 	strMsg.Format(L"收到PostFileA接口 %s %u字节数据", fileName.c_str(), len);
-// 	dlg->AppendMsg(strMsg);
-// }
+		tmpStr.Format(L"收到MG_EV_HTTP_MSG uri:%s", CString(hm->uri.ptr));
+		listenEventData->dlg->AppendMsg(tmpStr);
+	}
+	break;
+	case MG_EV_HTTP_CHUNK:
+	{
+		mg_http_message* hm = (mg_http_message*)ev_data;
+		if (mg_http_match_uri(hm, "/api/postA"))
+		{
+			mg_http_reply(conn, 200, "", "{\"result\": \"%.*s\"}\n", (int)hm->uri.len, hm->uri.ptr);
+		}
 
+		static int chunkCount = 0;
+		chunkCount += hm->chunk.len;
+		
+		tmpStr.Format(L"收到MG_EV_HTTP_CHUNK chunkLen:%d chunkCount:%d", hm->chunk.len, chunkCount);
+		listenEventData->dlg->AppendMsg(tmpStr);
 
-// static void OnHTTP_API_putA(evhttp_request* req, void* arg)
-// {
-// 	CMongooseExample_MFCDlg* dlg = (CMongooseExample_MFCDlg*)arg;
-// 
-// 	size_t len = evbuffer_get_length(req->input_buffer);
-// 	if (len > 0)
-// 	{
-// 		// 获取数据指针
-// 		unsigned char* data = evbuffer_pullup(req->input_buffer, len);
-// 
-// 		// 处理数据...
-// 
-// 		// 清空数据
-// 		evbuffer_drain(req->input_buffer, len);
-// 	}
-// 
-// 	const char* s = "This is the test buf";
-// 	evbuffer_add(req->output_buffer, s, strlen(s));
-// 	evhttp_send_reply(req, 200, "OK", nullptr);
-// 
-// 	CString strMsg;
-// 	strMsg.Format(L"收到PutA接口%u字节数据", len);
-// 	dlg->AppendMsg(strMsg);
-// }
-// 
-// static void OnHTTP_API_delA(evhttp_request* req, void* arg)
-// {
-// 	CMongooseExample_MFCDlg* dlg = (CMongooseExample_MFCDlg*)arg;
-// 
-// 	size_t len = evbuffer_get_length(req->input_buffer);
-// 	if (len > 0)
-// 	{
-// 		// 获取数据指针
-// 		unsigned char* data = evbuffer_pullup(req->input_buffer, len);
-// 
-// 		// 处理数据...
-// 
-// 		// 清空数据
-// 		evbuffer_drain(req->input_buffer, len);
-// 	}
-// 
-// 	const char* s = "This is the test buf";
-// 	evbuffer_add(req->output_buffer, s, strlen(s));
-// 	evhttp_send_reply(req, 200, "OK", nullptr);
-// 
-// 	CString strMsg;
-// 	strMsg.Format(L"收到DelA接口%u字节数据", len);
-// 	dlg->AppendMsg(strMsg);
-// }
-
-// static void OnHTTPUnmatchedRequest(evhttp_request* req, void* arg)
-// {
-// 	CMongooseExample_MFCDlg* dlg = (CMongooseExample_MFCDlg*)arg;
-// 
-// 	const char* s = "This is the generic buf";
-// 	evbuffer_add(req->output_buffer, s, strlen(s));
-// 	evhttp_send_reply(req, 200, "OK", nullptr);
-// }
-
-// static bufferevent* OnHTTPSetBev(struct event_base* base, void* arg)
-// {
-// 	EventData* eventData = (EventData*)arg;
-// 
-// 	eventData->bev = bufferevent_openssl_socket_new(base,
-// 		-1,
-// 		SSL_new(eventData->ssl_ctx),
-// 		BUFFEREVENT_SSL_ACCEPTING,
-// 		BEV_OPT_CLOSE_ON_FREE);
-// 	return eventData->bev;
-// }
+		mg_http_delete_chunk(conn, hm);
+	}
+	break;
+	default:
+	{
+		tmpStr.Format(L"OnHTTPServerEvent unhandle ev:%d", ev);
+		listenEventData->dlg->AppendMsg(tmpStr);
+	}
+	break;
+	}
+}
 
 void CMongooseExample_MFCDlg::OnBtnHttpServer()
 {
-	// 	event_config* cfg = event_config_new();
-	// 	evthread_use_windows_threads();
-	// 	event_config_set_num_cpus_hint(cfg, 8);
-	// 	event_config_set_flag(cfg, EVENT_BASE_FLAG_STARTUP_IOCP);
-	// 
-	// 	event_base* eventBase = event_base_new_with_config(cfg);
-	// 	if (!eventBase)
-	// 	{
-	// 		event_config_free(cfg);
-	// 		AppendMsg(L"创建eventBase失败");
-	// 		return;
-	// 	}
-	// 	event_config_free(cfg);
-	// 	cfg = nullptr;
-	// 
-	// 	_httpServer = evhttp_new(eventBase);
-	// 	if (!_httpServer)
-	// 	{
-	// 		AppendMsg(L"创建http_server失败");
-	// 
-	// 		event_base_free(eventBase);
-	// 		return;
-	// 	}
-	// 
-	// 	// 连接参数设置
-	// 	evhttp_set_max_headers_size(_httpServer, HTTP_MAX_HEAD_SIZE);
-	// 	evhttp_set_max_body_size(_httpServer, HTTP_MAX_BODY_SIZE);
-	// 	evhttp_set_max_connections(_httpServer, 10000 * 100);
-	// 	evhttp_set_timeout(_httpServer, 10);//设置闲置连接自动断开的超时时间(s)
-	// 
-	// 	_btnHTTPServer.EnableWindow(FALSE);
-	// 	_btnStopHttpServer.EnableWindow(TRUE);
-	// 
-	// 	//创建、绑定、监听socket
-	// 	CString tmpStr;
-	// 	_editPort.GetWindowText(tmpStr);
-	// 	const int port = _wtoi(tmpStr);
-	// 
-	// 	sockaddr_in localAddr = { 0 };
-	// 	localAddr.sin_family = AF_INET;
-	// 	localAddr.sin_port = htons(port);
-	// 
-	// 	EventData* eventData = new EventData;
-	// 	eventData->dlg = this;
-	// 
-	// 	if (IsUseSSL())
-	// 	{
-	// 		CString exeDir = GetModuleDir();
-	// 		CString serverCrtPath = CombinePath(exeDir, L"../3rd/OpenSSL/server.crt");
-	// 		CString serverKeyPath = CombinePath(exeDir, L"../3rd/OpenSSL/server.key");
-	// 
-	// 		// 引入之前生成好的私钥文件和证书文件
-	// 		ssl_ctx_st* ssl_ctx = SSL_CTX_new(TLS_server_method());
-	// 		if (!ssl_ctx)
-	// 		{
-	// 			AppendMsg(L"ssl_ctx new failed");
-	// 			return;
-	// 		}
-	// 
-	// 		int res = SSL_CTX_use_certificate_chain_file(ssl_ctx, UnicodeToUTF8(serverCrtPath).c_str());
-	// 		if (res != 1)
-	// 		{
-	// 			AppendMsg(L"SSL_CTX_use_certificate_chain_file failed");
-	// 			return;
-	// 		}
-	// 		res = SSL_CTX_use_PrivateKey_file(ssl_ctx, UnicodeToUTF8(serverKeyPath).c_str(), SSL_FILETYPE_PEM);
-	// 		if (res != 1)
-	// 		{
-	// 			AppendMsg(L"SSL_CTX_use_PrivateKey_file failed");
-	// 			return;
-	// 		}
-	// 		res = SSL_CTX_check_private_key(ssl_ctx);
-	// 		if (res != 1)
-	// 		{
-	// 			AppendMsg(L"SSL_CTX_check_private_key failed");
-	// 			return;
-	// 		}
-	// 
-	// 		eventData->ssl_ctx = ssl_ctx;
-	// 
-	// 		evhttp_set_bevcb(_httpServer, OnHTTPSetBev, eventData);
-	// 	}
-	// 
-	// 	_httpSocket = evhttp_bind_socket_with_handle(_httpServer, "0.0.0.0", port);
-	// 	if (!_httpSocket)
-	// 	{
-	// 		AppendMsg(L"创建evhttp_bind_socket失败");
-	// 		delete eventData;
-	// 		return;
-	// 	}	
-	// 
-	// 	/*
-	// 		URI like http://127.0.0.1:23300/api/getA?q=test&s=some+thing
-	// 		The first entry is: key="q", value="test"
-	// 		The second entry is: key="s", value="some thing"
-	// 	*/		
-	// 	evhttp_set_cb(_httpServer, "/api/getA", OnHTTP_API_getA, this);
-	// 	evhttp_set_cb(_httpServer, "/api/postA", OnHTTP_API_postA, this);
-	// 	evhttp_set_cb(_httpServer, "/api/postFileA", OnHTTP_API_postFileA, this);
-	// 	evhttp_set_cb(_httpServer, "/api/putA", OnHTTP_API_putA, this);
-	// 	evhttp_set_cb(_httpServer, "/api/delA", OnHTTP_API_delA, this);
-	// 	evhttp_set_gencb(_httpServer, OnHTTPUnmatchedRequest, this);
-	// 		
-	// 	AppendMsg(L"HTTP 服务端启动");
-	// 	thread([&, eventData, eventBase]
-	// 	{
-	// 		event_base_dispatch(eventBase); // 阻塞
-	// 
-	// 		delete eventData;
-	// 		evhttp_free(_httpServer);		
-	// 	}).detach();
+	_isNeedDeleteMgr = false;
+
+	mg_mgr* mgr = new mg_mgr;
+	mg_mgr_init(mgr);
+	thread([&, mgr]
+	{
+		while (!_isNeedDeleteMgr)
+		{
+			mg_mgr_poll(mgr, 1);
+		}
+
+		mg_mgr_free(mgr);
+		_listenEventData = nullptr;
+		AppendMsg(L"HTTP服务端事件循环结束");
+	}).detach();
+
+	CString tmpStr;
+	_editPort.GetWindowText(tmpStr);
+	const int port = _wtoi(tmpStr);
+	CStringA url;
+	if (IsUseSSL())
+	{
+		url.Format("https://0.0.0.0:%d", port);
+	}
+	else
+	{
+		url.Format("http://0.0.0.0:%d", port);
+	}
+
+	_listenEventData = make_shared<EventData>(this);
+	_listenEventData->conn = mg_http_listen(mgr, url, OnHTTPServerEvent, _listenEventData.get());
+	if (!_listenEventData->conn) 
+	{
+		AppendMsg(L"HTTP开始监听失败");
+		_isNeedDeleteMgr = true;
+		return;
+	}
+
+	AppendMsg(L"HTTP开始监听");
+	_btnHTTPServer.EnableWindow(FALSE);
+	_btnStopHttpServer.EnableWindow(TRUE);
 }
 
 void CMongooseExample_MFCDlg::OnBtnStopHttpServer()
 {
-	// 	if (_httpServer && _httpSocket)
-	// 	{
-	// 		evhttp_del_accept_socket(_httpServer, _httpSocket);
-	// 
-	// 		AppendMsg(L"HTTP 服务端停止");
-	// 		_btnHTTPServer.EnableWindow(TRUE);
-	// 		_btnStopHttpServer.EnableWindow(FALSE);
-	// 	}
-}
+	if (_listenEventData)
+	{
+		_listenEventData->conn->is_draining = true;
+		AppendMsg(L"HTTP 服务端停止");
+		_btnHTTPServer.EnableWindow(TRUE);
+		_btnStopHttpServer.EnableWindow(FALSE);
+	}
 
-// static void OnHttpResponseGetA(evhttp_request* req, void* arg)
-// {
-// 	HttpData* httpData = (HttpData*)arg;
-// 
-// 	if (req)
-// 	{
-// 		// 获取数据长度
-// 		size_t len = evbuffer_get_length(req->input_buffer);
-// 		if (len > 0)
-// 		{
-// 			// 获取数据指针
-// 			unsigned char* data = evbuffer_pullup(req->input_buffer, len);
-// 			char* responseStr = new char[len + 1]{ 0 };
-// 			memcpy(responseStr, data, len);
-// 
-// 			CString strMsg;
-// 			strMsg.Format(L"收到GetA接口回复：%s", UTF8ToUnicode(responseStr).c_str());
-// 			httpData->dlg->AppendMsg(strMsg);
-// 			delete[] responseStr;
-// 
-// 			// 清空数据
-// 			evbuffer_drain(req->input_buffer, len);
-// 			evhttp_request_free(req);
-// 		}
-// 	}
-// 	else
-// 	{
-// 		httpData->dlg->AppendMsg(L"GetA失败");
-// 	}
-// 
-// 	// 主动断开与服务器连接
-// 	httpData->Free();
-// }
+	// 关闭事件循环
+	_isNeedDeleteMgr = true;
+}
 
 void CMongooseExample_MFCDlg::OnBtnHttpGet()
 {
@@ -1448,121 +988,6 @@ void CMongooseExample_MFCDlg::OnBtnHttpGet()
 	// 		// 先断开连接，后释放eventBase
 	// 		delete httpData;
 	// 		event_base_free(eventBase);
-	// 	}).detach();
-}
-
-// static void OnHttpResponsePostA(evhttp_request* req, void* arg)
-// {
-// 	HttpData* httpData = (HttpData*)arg;
-// 	if (req)
-// 	{
-// 		// 获取数据长度
-// 		size_t len = evbuffer_get_length(req->input_buffer);
-// 		if (len > 0)
-// 		{
-// 			// 获取数据指针
-// 			unsigned char* data = evbuffer_pullup(req->input_buffer, len);
-// 
-// 			// 处理数据...
-// 
-// 			// 清空数据
-// 			evbuffer_drain(req->input_buffer, len);
-// 		}
-// 		evhttp_request_free(req);
-// 
-// 		CString strMsg;
-// 		strMsg.Format(L"收到PostA接口回复%u字节数据", len);
-// 		httpData->dlg->AppendMsg(strMsg);
-// 	}
-// 	else
-// 	{
-// 		httpData->dlg->AppendMsg(L"PostA失败");
-// 	}	
-// 
-// 	// 主动断开与服务器连接
-// 	//httpData->Free();
-// }
-
-void CMongooseExample_MFCDlg::OnBtnHttpPost()
-{
-	CString tmpStr;
-	_editRemotePort.GetWindowText(tmpStr);
-	const int remotePort = _wtoi(tmpStr);
-
-	CString strURI;
-	strURI.Format(L"http://127.0.0.1:%d/api/postA?q=test&s=some+thing", remotePort);
-	string utf8URI = UnicodeToUTF8(strURI);
-	const char* uri = utf8URI.c_str();
-
-	// 	evthread_use_windows_threads();
-	// 	event_base* eventBase = event_base_new();
-	// 
-	// 	HttpData* httpData = new HttpData;
-	// 	httpData->dlg = this;
-	// 
-	// 	httpData->evURI = evhttp_uri_parse(uri);
-	// 	const char* host = evhttp_uri_get_host(httpData->evURI);
-	// 	int port = evhttp_uri_get_port(httpData->evURI);
-	// 
-	// 	if (IsUseSSL())
-	// 	{
-	// 		// bufferevent_openssl_socket_new方法包含了对bufferevent和SSL的管理，因此当连接关闭的时候不再需要SSL_free
-	// 		httpData->ssl_ctx = SSL_CTX_new(TLS_client_method());
-	// 		httpData->ssl = SSL_new(httpData->ssl_ctx);
-	// 		httpData->bev = bufferevent_openssl_socket_new(eventBase, -1, httpData->ssl, BUFFEREVENT_SSL_CONNECTING, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
-	// 		if (httpData->bev)
-	// 		{
-	// 			bufferevent_openssl_set_allow_dirty_shutdown(httpData->bev, 1);
-	// 		}
-	// 	}
-	// 	else
-	// 	{
-	// 		httpData->bev = bufferevent_socket_new(eventBase, -1, BEV_OPT_CLOSE_ON_FREE);
-	// 	}
-	// 	if (httpData->bev == NULL)
-	// 	{
-	// 		AppendMsg(L"bev创建失败");
-	// 		delete httpData;
-	// 		return;
-	// 	}
-	// 
-	// 	httpData->evConn = evhttp_connection_base_bufferevent_new(eventBase, NULL, httpData->bev, host, port);
-	// 	if (httpData->evConn == NULL)
-	// 	{
-	// 		AppendMsg(L"evhttp_connection_base_bufferevent_new失败");
-	// 		delete httpData;
-	// 		return;
-	// 	}
-	// 
-	// 	evhttp_connection_set_max_headers_size(httpData->evConn, HTTP_MAX_HEAD_SIZE);
-	// 	evhttp_connection_set_max_body_size(httpData->evConn, HTTP_MAX_BODY_SIZE);
-	// 	evhttp_connection_set_timeout(httpData->evConn, 3);// 设置超时时间(s)
-	// 
-	// 	evhttp_request* req = evhttp_request_new(OnHttpResponsePostA, httpData);
-	// 
-	// 	// 标准Header
-	// 	evhttp_add_header(req->output_headers, "Connection", "keep-alive");
-	// 	evhttp_add_header(req->output_headers, "Host", "localhost");
-	// 
-	// 	// 自定义Header
-	// 	const size_t bufSize = 1024 * 1024; // 单次最大1GB（1024 * 1024 * 1024）
-	// 	evhttp_add_header(req->output_headers, "bodySize", Int2Str(bufSize).c_str());
-	// 
-	// 	// 自定义Body数据
-	// 	char* postBuf = new char[bufSize] {'A'};
-	// 	evbuffer_add(req->output_buffer, postBuf, bufSize);
-	// 	delete[] postBuf;
-	// 
-	// 	evhttp_make_request(httpData->evConn, req, EVHTTP_REQ_POST, "/api/postA?q=test&s=some+thing");
-	// 
-	// 	thread([&, eventBase, httpData]
-	// 	{
-	// 		event_base_dispatch(eventBase); // 阻塞
-	// 		AppendMsg(L"客户端HttpPost event_base_dispatch线程 结束");
-	// 
-	// 		// 先断开连接，后释放eventBase
-	// 		delete httpData;
-	// 		event_base_free(eventBase);		
 	// 	}).detach();
 }
 
@@ -1709,252 +1134,6 @@ void CMongooseExample_MFCDlg::OnBtnHttpPostFile()
 	// 		{
 	// 			event_base_dispatch(eventBase); // 阻塞
 	// 			AppendMsg(L"客户端HttpPost event_base_dispatch线程 结束");
-	// 
-	// 			// 先断开连接，后释放eventBase
-	// 			delete httpData;
-	// 			event_base_free(eventBase);
-	// 		}).detach();
-}
-
-// static void OnHttpResponsePutA(evhttp_request* req, void* arg)
-// {
-// 	auto threadID = this_thread::get_id();
-// 	HttpData* httpData = (HttpData*)arg;
-// 	if (req)
-// 	{
-// 		// 获取数据长度
-// 		size_t len = evbuffer_get_length(req->input_buffer);
-// 		if (len > 0)
-// 		{
-// 			// 获取数据指针
-// 			unsigned char* data = evbuffer_pullup(req->input_buffer, len);
-// 
-// 			// 处理数据...
-// 
-// 			// 清空数据
-// 			evbuffer_drain(req->input_buffer, len);
-// 		}
-// 
-// 		CString strMsg;
-// 		strMsg.Format(L"收到PutA接口回复%u字节数据", len);
-// 		httpData->dlg->AppendMsg(strMsg);
-// 	}
-// 	else
-// 	{
-// 		httpData->dlg->AppendMsg(L"PutA失败");
-// 	}
-// 
-// 	evhttp_request_free(httpData->req);
-// 	httpData->req = nullptr;
-// }
-
-void CMongooseExample_MFCDlg::OnBtnHttpPut()
-{
-	CString tmpStr;
-	_editRemotePort.GetWindowText(tmpStr);
-	const int remotePort = _wtoi(tmpStr);
-
-	thread([&, remotePort]
-		{
-			CString strURI;
-			strURI.Format(L"http://127.0.0.1:%d/api/putA?q=test&s=some+thing", remotePort);
-			string utf8URI = UnicodeToUTF8(strURI);
-			const char* uri = utf8URI.c_str();
-
-			// 		evthread_use_windows_threads();
-			// 		event_base* eventBase = event_base_new();
-			// 
-			// 		HttpData* httpData = new HttpData;
-			// 		httpData->dlg = this;
-			// 
-			// 		httpData->evURI = evhttp_uri_parse(uri);
-			// 		const char* host = evhttp_uri_get_host(httpData->evURI);
-			// 		int port = evhttp_uri_get_port(httpData->evURI);
-			// 
-			// 		if (IsUseSSL())
-			// 		{
-			// 			// bufferevent_openssl_socket_new方法包含了对bufferevent和SSL的管理，因此当连接关闭的时候不再需要SSL_free
-			// 			httpData->ssl_ctx = SSL_CTX_new(TLS_client_method());
-			// 			httpData->ssl = SSL_new(httpData->ssl_ctx);
-			// 			httpData->bev = bufferevent_openssl_socket_new(eventBase, -1, httpData->ssl, BUFFEREVENT_SSL_CONNECTING, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
-			// 			if (httpData->bev)
-			// 			{
-			// 				bufferevent_openssl_set_allow_dirty_shutdown(httpData->bev, 1);
-			// 			}
-			// 		}
-			// 		else
-			// 		{
-			// 			httpData->bev = bufferevent_socket_new(eventBase, -1, BEV_OPT_CLOSE_ON_FREE);
-			// 		}
-			// 		if (httpData->bev == NULL)
-			// 		{
-			// 			AppendMsg(L"bev创建失败");
-			// 			delete httpData;
-			// 			return;
-			// 		}
-			// 
-			// 		httpData->evConn = evhttp_connection_base_bufferevent_new(eventBase, NULL, httpData->bev, host, port);
-			// 		if (httpData->evConn == NULL)
-			// 		{
-			// 			AppendMsg(L"evhttp_connection_base_bufferevent_new失败");
-			// 			delete httpData;
-			// 			return;
-			// 		}
-			// 
-			// 		evhttp_connection_set_max_headers_size(httpData->evConn, HTTP_MAX_HEAD_SIZE);
-			// 		evhttp_connection_set_max_body_size(httpData->evConn, HTTP_MAX_BODY_SIZE);
-			// 		evhttp_connection_set_timeout(httpData->evConn, 1);// 设置闲置连接自动断开的超时时间(s)
-			// 		
-			// 		auto funReq = [httpData, eventBase]
-			// 		{
-			// 			auto threadID = this_thread::get_id();
-			// 			evhttp_request* req = evhttp_request_new(OnHttpResponsePutA, httpData);
-			// 			httpData->req = req;
-			// 
-			// 			// 标准Header
-			// 			evhttp_add_header(req->output_headers, "Connection", "keep-alive");
-			// 			evhttp_add_header(req->output_headers, "Host", "localhost");
-			// 
-			// 			// 自定义Header
-			// 			const size_t bufSize = 1024; // 单次最大1GB（1024 * 1024 * 1024）
-			// 			evhttp_add_header(req->output_headers, "bodySize", Int2Str(bufSize).c_str());
-			// 
-			// 			// 自定义Body数据
-			// 			char* postBuf = new char[bufSize] {'A'};
-			// 			evbuffer_add(req->output_buffer, postBuf, bufSize);
-			// 			delete[] postBuf;
-			// 
-			// 			evhttp_make_request(httpData->evConn, req, EVHTTP_REQ_PUT, "/api/putA?q=test&s=some+thing");
-			// 			httpData->dlg->AppendMsg(L"evhttp_make_request");
-			// 		};
-			// 
-			// 		// 创建空白定时器，以维持eventBase
-			// 		auto funcDoNothingTimer = [](evutil_socket_t fd, short event, void* arg) {};		
-			// 		event* ev = event_new(eventBase, -1, EV_PERSIST, funcDoNothingTimer, nullptr);
-			// 		timeval timeout = { 0, 100 };
-			// 		event_add(ev, &timeout);
-			// 
-			// 		// 间隔发送请求，模拟长连接	
-			// 		thread([funReq, ev]
-			// 		{
-			// 			int num = 0;
-			// 			do
-			// 			{
-			// 				funReq();
-			// 
-			// 				this_thread::sleep_for(chrono::seconds(5));
-			// 
-			// 				num++;
-			// 			} while (num < 5);
-			// 			event_del(ev);
-			// 			event_free(ev);
-			// 		}).detach();		
-			// 
-			// 		event_base_dispatch(eventBase); // 阻塞			
-			// 
-			// 		// 先断开连接，后释放eventBase
-			// 		delete httpData;
-			// 		event_base_free(eventBase);
-			// 		AppendMsg(L"客户端HttpPut event_base_dispatch线程 结束");
-			// 
-		}).detach();
-}
-
-// static void OnHttpResponseDelA(evhttp_request* req, void* arg)
-// {
-// 	HttpData* httpData = (HttpData*)arg;
-// 
-// 	if (req)
-// 	{
-// 		// 获取数据长度
-// 		size_t len = evbuffer_get_length(req->input_buffer);
-// 		if (len > 0)
-// 		{
-// 			// 获取数据指针
-// 			unsigned char* data = evbuffer_pullup(req->input_buffer, len);
-// 			char* responseStr = new char[len + 1]{ 0 };
-// 			memcpy(responseStr, data, len);
-// 
-// 			CString strMsg;
-// 			strMsg.Format(L"收到DelA接口回复：%s", UTF8ToUnicode(responseStr).c_str());
-// 			httpData->dlg->AppendMsg(strMsg);
-// 			delete[] responseStr;
-// 
-// 			// 清空数据
-// 			evbuffer_drain(req->input_buffer, len);
-// 			evhttp_request_free(req);
-// 		}
-// 	}	
-// 
-// 	// 主动断开与服务器连接
-// 	httpData->Free();
-// }
-
-void CMongooseExample_MFCDlg::OnBtnHttpDel()
-{
-	CString tmpStr;
-	_editRemotePort.GetWindowText(tmpStr);
-	const int remotePort = _wtoi(tmpStr);
-
-	CString strURI;
-	strURI.Format(L"http://127.0.0.1:%d/api/delA?q=test&s=some+thing", remotePort);
-	string utf8URI = UnicodeToUTF8(strURI);
-	const char* uri = utf8URI.c_str();
-
-	// 	evthread_use_windows_threads();
-	// 	event_base* eventBase = event_base_new();
-	// 
-	// 	HttpData* httpData = new HttpData;
-	// 	httpData->dlg = this;
-	// 
-	// 	httpData->evURI = evhttp_uri_parse(uri);
-	// 	const char* host = evhttp_uri_get_host(httpData->evURI);
-	// 	int port = evhttp_uri_get_port(httpData->evURI);
-	// 
-	// 	if (IsUseSSL())
-	// 	{
-	// 		// bufferevent_openssl_socket_new方法包含了对bufferevent和SSL的管理，因此当连接关闭的时候不再需要SSL_free
-	// 		httpData->ssl_ctx = SSL_CTX_new(TLS_client_method());
-	// 		httpData->ssl = SSL_new(httpData->ssl_ctx);
-	// 		httpData->bev = bufferevent_openssl_socket_new(eventBase, -1, httpData->ssl, BUFFEREVENT_SSL_CONNECTING, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
-	// 		if (httpData->bev)
-	// 		{
-	// 			bufferevent_openssl_set_allow_dirty_shutdown(httpData->bev, 1);
-	// 		}
-	// 	}
-	// 	else
-	// 	{
-	// 		httpData->bev = bufferevent_socket_new(eventBase, -1, BEV_OPT_CLOSE_ON_FREE);
-	// 	}	
-	// 	if (httpData->bev == NULL)
-	// 	{
-	// 		AppendMsg(L"bev创建失败");
-	// 		delete httpData;
-	// 		return;
-	// 	}
-	// 
-	// 	httpData->evConn = evhttp_connection_base_bufferevent_new(eventBase, NULL, httpData->bev, host, port);
-	// 	if (httpData->evConn == NULL)
-	// 	{
-	// 		AppendMsg(L"evhttp_connection_base_bufferevent_new失败");
-	// 		delete httpData;
-	// 		return;
-	// 	}
-	// 
-	// 	evhttp_request* req = evhttp_request_new(OnHttpResponseDelA, httpData);
-	// 	if (req == NULL)
-	// 	{
-	// 		AppendMsg(L"evhttp_request_new失败");
-	// 		delete httpData;
-	// 		return;
-	// 	}
-	// 
-	// 	evhttp_make_request(httpData->evConn, req, EVHTTP_REQ_GET, "/api/delA?q=test&s=some+thing");
-	// 
-	// 	thread([&, eventBase, httpData]
-	// 		{
-	// 			event_base_dispatch(eventBase); // 阻塞
-	// 			AppendMsg(L"客户端HttpGet event_base_dispatch线程 结束");
 	// 
 	// 			// 先断开连接，后释放eventBase
 	// 			delete httpData;

@@ -73,7 +73,6 @@ private:
 	afx_msg void OnBtnUdpClose();
 	afx_msg void OnBtnHttpServer();
 	afx_msg void OnBtnStopHttpServer();
-public:
 	afx_msg void OnBtnHttpGet();
 	afx_msg void OnBtnHttpPost();
 	afx_msg void OnBtnHttpPut();
