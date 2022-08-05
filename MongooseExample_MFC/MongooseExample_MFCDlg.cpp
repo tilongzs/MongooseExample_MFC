@@ -150,10 +150,7 @@ BEGIN_MESSAGE_MAP(CMongooseExample_MFCDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BUTTON_HTTP_SERVER, &CMongooseExample_MFCDlg::OnBtnHttpServer)
 	ON_BN_CLICKED(IDC_BUTTON_HTTP_SERVER_STOP, &CMongooseExample_MFCDlg::OnBtnStopHttpServer)
 	ON_BN_CLICKED(IDC_BUTTON_HTTP_GET, &CMongooseExample_MFCDlg::OnBtnHttpGet)
-	ON_BN_CLICKED(IDC_BUTTON_HTTP_POST, &CMongooseExample_MFCDlg::OnBtnHttpPost)
-	ON_BN_CLICKED(IDC_BUTTON_HTTP_PUT, &CMongooseExample_MFCDlg::OnBtnHttpPut)
 	ON_BN_CLICKED(IDC_BUTTON_HTTP_POST_FILE, &CMongooseExample_MFCDlg::OnBtnHttpPostFile)
-	ON_BN_CLICKED(IDC_BUTTON_HTTP_DEL, &CMongooseExample_MFCDlg::OnBtnHttpDel)
 END_MESSAGE_MAP()
 
 BOOL CMongooseExample_MFCDlg::OnInitDialog()
@@ -864,6 +861,14 @@ static void OnHTTPServerEvent(struct mg_connection* conn, int ev, void* ev_data,
 		{
 			mg_http_reply(conn, 200, "", "{\"result\": \"%.*s\"}\n", (int)hm->uri.len, hm->uri.ptr);
 		}
+		else
+		{
+			// 文件目录服务
+			struct mg_http_serve_opts opts;
+			memset(&opts, 0, sizeof(opts));
+			opts.root_dir = "D:/SoftwareDev";
+			mg_http_serve_dir(conn, hm, &opts);
+		}
 
 		tmpStr.Format(L"收到MG_EV_HTTP_MSG uri:%s", CString(hm->uri.ptr));
 		listenEventData->dlg->AppendMsg(tmpStr);
@@ -872,16 +877,27 @@ static void OnHTTPServerEvent(struct mg_connection* conn, int ev, void* ev_data,
 	case MG_EV_HTTP_CHUNK:
 	{
 		mg_http_message* hm = (mg_http_message*)ev_data;
-		if (mg_http_match_uri(hm, "/api/postA"))
-		{
-			mg_http_reply(conn, 200, "", "{\"result\": \"%.*s\"}\n", (int)hm->uri.len, hm->uri.ptr);
-		}
 
 		static int chunkCount = 0;
 		chunkCount += hm->chunk.len;
+
+		if (0 == hm->chunk.len)
+		{
+			// 数据分块接收完成，开始回复
+			if (mg_http_match_uri(hm, "/api/postA"))
+			{
+				mg_http_reply(conn, 200, "", "{\"result\": \"%.*s\"}\n", (int)hm->uri.len, hm->uri.ptr);
+			}
+
+			tmpStr.Format(L"收到MG_EV_HTTP_CHUNK数据分块接收完成 chunkCount:%d", chunkCount);
+			listenEventData->dlg->AppendMsg(tmpStr);
+
+			// 重置计数
+			chunkCount = 0;
+		}
 		
-		tmpStr.Format(L"收到MG_EV_HTTP_CHUNK chunkLen:%d chunkCount:%d", hm->chunk.len, chunkCount);
-		listenEventData->dlg->AppendMsg(tmpStr);
+// 		tmpStr.Format(L"收到MG_EV_HTTP_CHUNK chunkLen:%d chunkCount:%d", hm->chunk.len, chunkCount);
+// 		listenEventData->dlg->AppendMsg(tmpStr);
 
 		mg_http_delete_chunk(conn, hm);
 	}
