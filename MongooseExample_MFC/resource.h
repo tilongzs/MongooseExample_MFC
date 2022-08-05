@@ -25,9 +25,14 @@
 #define IDC_BUTTON_HTTP_SERVER          1015
 #define IDC_BUTTON_HTTP_SERVER_STOP     1016
 #define IDC_BUTTON_HTTP_GET             1017
+#define IDC_BUTTON_WS_SERVER            1017
 #define IDC_BUTTON_HTTP_POST            1018
+#define IDC_BUTTON_WS_SERVER_STOP       1018
 #define IDC_BUTTON_HTTP_PUT             1019
+#define IDC_BUTTON_WS_CONNECT           1019
 #define IDC_BUTTON_HTTP_POST_FILE       1020
+#define IDC_BUTTON_DISCONNECT_SERVER2   1020
+#define IDC_BUTTON_WS_DISCONNECT_SERVER 1020
 #define IDC_BUTTON_HTTP_POST2           1021
 #define IDC_BUTTON_HTTP_DEL             1021
 #define IDC_IPADDRESS1                  1022

@@ -149,8 +149,10 @@ BEGIN_MESSAGE_MAP(CMongooseExample_MFCDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BUTTON_UDP_CLOSE, &CMongooseExample_MFCDlg::OnBtnUdpClose)
 	ON_BN_CLICKED(IDC_BUTTON_HTTP_SERVER, &CMongooseExample_MFCDlg::OnBtnHttpServer)
 	ON_BN_CLICKED(IDC_BUTTON_HTTP_SERVER_STOP, &CMongooseExample_MFCDlg::OnBtnStopHttpServer)
-	ON_BN_CLICKED(IDC_BUTTON_HTTP_GET, &CMongooseExample_MFCDlg::OnBtnHttpGet)
-	ON_BN_CLICKED(IDC_BUTTON_HTTP_POST_FILE, &CMongooseExample_MFCDlg::OnBtnHttpPostFile)
+	ON_BN_CLICKED(IDC_BUTTON_WS_SERVER, &CMongooseExample_MFCDlg::OnBtnWebsocketServer)
+	ON_BN_CLICKED(IDC_BUTTON_WS_SERVER_STOP, &CMongooseExample_MFCDlg::OnBtnWebsocketServerStop)
+	ON_BN_CLICKED(IDC_BUTTON_WS_CONNECT, &CMongooseExample_MFCDlg::OnBtnWebsocketConnect)
+	ON_BN_CLICKED(IDC_BUTTON_WS_DISCONNECT_SERVER, &CMongooseExample_MFCDlg::OnBtnWebsocketDisconnectServer)
 END_MESSAGE_MAP()
 
 BOOL CMongooseExample_MFCDlg::OnInitDialog()
@@ -227,9 +229,14 @@ bool CMongooseExample_MFCDlg::IsUseSSL()
 	return _btnUseSSL.GetCheck();
 }
 
-void CMongooseExample_MFCDlg::OnTCPAccept(shared_ptr<EventData> eventData)
+void CMongooseExample_MFCDlg::OnSetCurrentEventData(shared_ptr<EventData> eventData)
 {
 	_currentEventData = eventData;
+
+	if (_currentEventData->conn == _listenEventData->conn)
+	{
+		ASSERT(0);
+	}
 }
 
 void CMongooseExample_MFCDlg::OnDisconnectClient(mg_connection* conn)
@@ -292,21 +299,18 @@ void OnTCPServerEvent(mg_connection* conn, int ev, void* ev_data, void* fn_data)
 		break;
 	case MG_EV_OPEN:
 	{
-		CString tmpStr;
 		tmpStr.Format(L"TCP服务端连接已准备 local:%s", GenerateIPPortString(conn->loc));
 		listenEventData->dlg->AppendMsg(tmpStr);
 	}
 	break;
 	case MG_EV_RESOLVE:
 	{
-		CString tmpStr;
 		tmpStr.Format(L"MG_EV_RESOLVE remote:%s local:%s", GenerateIPPortString(conn->rem), GenerateIPPortString(conn->loc));
 		listenEventData->dlg->AppendMsg(tmpStr);
 	}
 	break;
 	case MG_EV_ACCEPT:
 	{
-		CString tmpStr;
 		tmpStr.Format(L"新客户端连接 remote:%s", GenerateIPPortString(conn->rem));
 		listenEventData->dlg->AppendMsg(tmpStr);
 
@@ -341,14 +345,14 @@ void OnTCPServerEvent(mg_connection* conn, int ev, void* ev_data, void* fn_data)
 			mg_tls_init(conn, &tlsOpts);
 		}
 
+		// 保存当前连接
 		shared_ptr<EventData> eventData = make_shared<EventData>(listenEventData->dlg);
 		eventData->conn = conn;
-		listenEventData->dlg->OnTCPAccept(eventData);
+		listenEventData->dlg->OnSetCurrentEventData(eventData);
 	}
 	break;
 	case MG_EV_CLOSE:
 	{
-		CString tmpStr;
 		tmpStr.Format(L"与客户端%s的连接断开", GenerateIPPortString(conn->rem));
 		listenEventData->dlg->AppendMsg(tmpStr);
 
@@ -372,7 +376,6 @@ void OnTCPServerEvent(mg_connection* conn, int ev, void* ev_data, void* fn_data)
 	{
 		long* bytes_written = (long*)ev_data;
 
-		CString tmpStr;
 		tmpStr.Format(L"已发送给客户端%s %u字节", GenerateIPPortString(conn->rem), *bytes_written);
 		listenEventData->dlg->AppendMsg(tmpStr);
 	}
@@ -444,6 +447,8 @@ void OnTCPClientEvent(mg_connection* conn, int ev, void* ev_data, void* fn_data)
 		CString tmpStr;
 		tmpStr.Format(L"TCP客户端发生错误 remote:%s local:%s", GenerateIPPortString(conn->rem), GenerateIPPortString(conn->loc));
 		eventData->dlg->AppendMsg(tmpStr);
+
+		eventData->dlg->OnDisconnectServer();
 	}
 	break;
 	case MG_EV_POLL:
@@ -501,6 +506,12 @@ void OnTCPClientEvent(mg_connection* conn, int ev, void* ev_data, void* fn_data)
 		eventData->dlg->AppendMsg(tmpStr);
 	}
 	break;
+	case MG_EV_WS_MSG:
+	{
+		struct mg_ws_message* wm = (struct mg_ws_message*)ev_data;
+
+	}
+	break;
 	default:
 		eventData->dlg->AppendMsg(L"OnTCPEvent default");
 		break;
@@ -511,7 +522,6 @@ void CMongooseExample_MFCDlg::OnBtnConnect()
 {
 	_isNeedDeleteMgr = false;
 
-	// 使用指定的本地IP、端口
 	CString tmpStr;
 	DWORD dwRemoteIP;
 	_ipRemote.GetAddress(dwRemoteIP);
@@ -632,54 +642,41 @@ void CMongooseExample_MFCDlg::OnBtnSendMsg()
 			// 		char* msg = new char[]("hello Mongoose");
 			// 		int len = strlen(msg);
 
-			const int len = 1024 * 10;
+			const size_t len = 1024 * 10;
 			char* msg = new char[len] {0};
 
-			if (mg_send(_currentEventData->conn, msg, len))
+			if (_isWebsocket)
 			{
-				CString tmpStr;
-				tmpStr.Format(L"发送%u字节数据", len);
-				AppendMsg(tmpStr);
+				size_t ret = mg_ws_send(_currentEventData->conn, msg, len, WEBSOCKET_OP_BINARY);
+				if (ret)
+				{
+					CString tmpStr;
+					tmpStr.Format(L"发送%u字节数据 实际总大小:%u", len, ret);
+					AppendMsg(tmpStr);
+				}
+				else
+				{
+					AppendMsg(L"发送数据失败");
+				}
 			}
 			else
 			{
-				AppendMsg(L"发送数据失败");
+				if (mg_send(_currentEventData->conn, msg, len))
+				{
+					CString tmpStr;
+					tmpStr.Format(L"发送%u字节数据", len);
+					AppendMsg(tmpStr);
+				}
+				else
+				{
+					AppendMsg(L"发送数据失败");
+				}
 			}
 
 			delete[] msg;
 		}
 	}).detach();
 }
-
-// static void OnUDPRead(evutil_socket_t sockfd, short events, void* param)
-// {
-// 	EventData* eventData = (EventData*)param;
-// 
-// 	if (events & EV_READ)
-// 	{
-// 		struct sockaddr_in addr;
-// 		socklen_t addLen = sizeof(addr);
-// 		char* buffer = new char[SINGLE_UDP_PACKAGE_SIZE] {0};
-// 
-// 		int recvLen = recvfrom(sockfd, buffer, SINGLE_UDP_PACKAGE_SIZE, 0, (sockaddr*)&addr, &addLen);
-// 		if (recvLen == -1)
-// 		{
-// 			eventData->dlg->AppendMsg(L"recvfrom 失败");
-// 		}
-// 		else
-// 		{
-// 			string remoteIP;
-// 			int remotePort;
-// 			ConvertIPPort(addr, remoteIP, remotePort);
-// 
-// 			CString tmpStr;
-// 			tmpStr.Format(L"threadID:%d 收到来自%s:%d %u字节", this_thread::get_id(), S2Unicode(remoteIP).c_str(), remotePort, recvLen);
-// 			eventData->dlg->AppendMsg(tmpStr);
-// 		}
-// 
-// 		delete[] buffer;
-// 	}
-// }
 
 void OnUDPEvent(mg_connection* conn, int ev, void* ev_data, void* fn_data)
 {
@@ -833,6 +830,9 @@ static void OnHTTPServerEvent(struct mg_connection* conn, int ev, void* ev_data,
 		break;
 	case MG_EV_ACCEPT:
 	{
+		tmpStr.Format(L"新客户端连接 remote:%s", GenerateIPPortString(conn->rem));
+		listenEventData->dlg->AppendMsg(tmpStr);
+
 		if (listenEventData->dlg->IsUseSSL())
 		{
 			CString exeDir = GetModuleDir();
@@ -970,189 +970,337 @@ void CMongooseExample_MFCDlg::OnBtnStopHttpServer()
 	_isNeedDeleteMgr = true;
 }
 
-void CMongooseExample_MFCDlg::OnBtnHttpGet()
+
+static void OnWebsocketServerEvent(struct mg_connection* conn, int ev, void* ev_data, void* fn_data)
 {
+	EventData* listenEventData = (EventData*)fn_data;
 	CString tmpStr;
-	_editRemotePort.GetWindowText(tmpStr);
-	const int remotePort = _wtoi(tmpStr);
 
-	CString strURI;
-	strURI.Format(L"http://127.0.0.1:%d/api/getA?q=test&s=some+thing", remotePort);
-	string utf8URI = UnicodeToUTF8(strURI);
-	const char* uri = utf8URI.c_str();
+	switch (ev)
+	{
+	case MG_EV_ERROR:
+	case MG_EV_OPEN:
+	case MG_EV_POLL:
+		break;
+	case MG_EV_ACCEPT:
+	{
+		tmpStr.Format(L"新客户端连接 remote:%s", GenerateIPPortString(conn->rem));
+		listenEventData->dlg->AppendMsg(tmpStr);
 
-	// 	evthread_use_windows_threads();
-	// 	event_base* eventBase = event_base_new();
-	// 
-	// 	HttpData* httpData = new HttpData;
-	// 	httpData->dlg = this;
-	// 
-	// 	httpData->evURI = evhttp_uri_parse(uri);
-	// 	const char* host = evhttp_uri_get_host(httpData->evURI);
-	// 	int port = evhttp_uri_get_port(httpData->evURI);
-	// 	httpData->evConn = evhttp_connection_base_new(eventBase, NULL, host, port);
-	// 
-	// 	evhttp_request* req = evhttp_request_new(OnHttpResponseGetA, httpData);
-	// 
-	// 	evhttp_make_request(httpData->evConn, req, EVHTTP_REQ_GET, "/api/getA?q=test&s=some+thing");
-	// 	
-	// 	thread([&, eventBase, httpData]
-	// 	{
-	// 		event_base_dispatch(eventBase); // 阻塞
-	// 		AppendMsg(L"客户端HttpGet event_base_dispatch线程 结束");
-	// 
-	// 		// 先断开连接，后释放eventBase
-	// 		delete httpData;
-	// 		event_base_free(eventBase);
-	// 	}).detach();
+		if (listenEventData->dlg->IsUseSSL())
+		{
+			CString exeDir = GetModuleDir();
+			string serverCrtPath = UnicodeToUTF8(CombinePath(exeDir, L"../3rd/OpenSSL/server.crt"));
+			string serverKeyPath = UnicodeToUTF8(CombinePath(exeDir, L"../3rd/OpenSSL/server.key"));
+			mg_tls_opts tlsOpts;
+			memset(&tlsOpts, 0, sizeof(mg_tls_opts));
+			tlsOpts.cert = serverCrtPath.c_str();
+			tlsOpts.certkey = serverKeyPath.c_str();
+			mg_tls_init(conn, &tlsOpts);
+		}
+	}
+	break;
+	case MG_EV_READ:
+	case MG_EV_WRITE:
+		break;
+	case MG_EV_CLOSE:
+	{
+		tmpStr.Format(L"与客户端%s的连接断开", GenerateIPPortString(conn->rem));
+		listenEventData->dlg->AppendMsg(tmpStr);
+
+		listenEventData->dlg->OnDisconnectClient(conn);
+	}
+		break;
+	case MG_EV_HTTP_MSG:
+	{
+		mg_http_message* hm = (mg_http_message*)ev_data;
+		if (mg_http_match_uri(hm, "/websocket")) {
+			// Upgrade to websocket. From now on, a connection is a full-duplex
+			// Websocket connection, which will receive MG_EV_WS_MSG events.
+			mg_ws_upgrade(conn, hm, NULL);
+
+			tmpStr.Format(L"客户端升级websocket remote:%s", GenerateIPPortString(conn->rem));
+			listenEventData->dlg->AppendMsg(tmpStr);
+
+			// 保存当前连接
+			shared_ptr<EventData> eventData = make_shared<EventData>(listenEventData->dlg);
+			eventData->conn = conn;
+			listenEventData->dlg->OnSetCurrentEventData(eventData);
+		}
+		else if (mg_http_match_uri(hm, "/api/getA"))
+		{
+			mg_http_reply(conn, 200, "", "{\"result\": \"%.*s\"}\n", (int)hm->uri.len, hm->uri.ptr);
+		}
+		else if (mg_http_match_uri(hm, "/api/postA"))
+		{
+			mg_http_reply(conn, 200, "", "{\"result\": \"%.*s\"}\n", (int)hm->uri.len, hm->uri.ptr);
+		}
+		else
+		{
+			// 文件目录服务
+			struct mg_http_serve_opts opts;
+			memset(&opts, 0, sizeof(opts));
+			opts.root_dir = "D:/SoftwareDev";
+			mg_http_serve_dir(conn, hm, &opts);
+		}
+
+		tmpStr.Format(L"收到MG_EV_HTTP_MSG uri:%s", CString(hm->uri.ptr));
+		listenEventData->dlg->AppendMsg(tmpStr);
+	}
+	break;
+	case MG_EV_HTTP_CHUNK:
+	{
+		mg_http_message* hm = (mg_http_message*)ev_data;
+
+		static int chunkCount = 0;
+		chunkCount += hm->chunk.len;
+
+		if (0 == hm->chunk.len)
+		{
+			// 数据分块接收完成，开始回复
+			if (mg_http_match_uri(hm, "/api/postA"))
+			{
+				mg_http_reply(conn, 200, "", "{\"result\": \"%.*s\"}\n", (int)hm->uri.len, hm->uri.ptr);
+			}
+
+			tmpStr.Format(L"收到MG_EV_HTTP_CHUNK数据分块接收完成 chunkCount:%d", chunkCount);
+			listenEventData->dlg->AppendMsg(tmpStr);
+
+			// 重置计数
+			chunkCount = 0;
+		}
+
+		// 		tmpStr.Format(L"收到MG_EV_HTTP_CHUNK chunkLen:%d chunkCount:%d", hm->chunk.len, chunkCount);
+		// 		listenEventData->dlg->AppendMsg(tmpStr);
+
+		mg_http_delete_chunk(conn, hm);
+	}
+	break;
+	case MG_EV_WS_OPEN:
+	{
+		CString tmpStr;
+		tmpStr.Format(L"与客户端remote:%s websocket协议成功", GenerateIPPortString(conn->rem));
+		listenEventData->dlg->AppendMsg(tmpStr);
+	}
+	break;
+	case MG_EV_WS_MSG:
+	{
+		// Got websocket frame. Received data is wm->data. Echo it back!
+		struct mg_ws_message* wm = (struct mg_ws_message*)ev_data;
+		tmpStr.Format(L"收到MG_EV_WS_MSG数据 大小:%u", wm->data.len);
+		listenEventData->dlg->AppendMsg(tmpStr);
+	}
+	break;
+	default:
+	{
+		tmpStr.Format(L"OnWebsocketServerEvent unhandle ev:%d", ev);
+		listenEventData->dlg->AppendMsg(tmpStr);
+	}
+	break;
+	}
 }
 
-// static void OnHttpResponsePostFileA(evhttp_request* req, void* arg)
-// {
-// 	HttpData* httpData = (HttpData*)arg;
-// 	if (req)
-// 	{
-// 		// 获取数据长度
-// 		size_t len = evbuffer_get_length(req->input_buffer);
-// 		if (len > 0)
-// 		{
-// 			// 获取数据指针
-// 			unsigned char* data = evbuffer_pullup(req->input_buffer, len);
-// 
-// 			// 处理数据...
-// 
-// 			// 清空数据
-// 			evbuffer_drain(req->input_buffer, len);
-// 		}
-// 		evhttp_request_free(req);
-// 
-// 		CString strMsg;
-// 		strMsg.Format(L"收到PostFileA接口回复%u字节数据", len);
-// 		httpData->dlg->AppendMsg(strMsg);
-// 	}
-// 	else
-// 	{
-// 		httpData->dlg->AppendMsg(L"PostFileA失败");
-// 	}
-// 
-// 	// 主动断开与服务器连接
-// 	//httpData->Free();
-// }
-
-void CMongooseExample_MFCDlg::OnBtnHttpPostFile()
+void CMongooseExample_MFCDlg::OnBtnWebsocketServer()
 {
+	_isNeedDeleteMgr = false;
+	_isWebsocket = true;
+
+	mg_mgr* mgr = new mg_mgr;
+	mg_mgr_init(mgr);
+	thread([&, mgr]
+	{
+		while (!_isNeedDeleteMgr)
+		{
+			mg_mgr_poll(mgr, 1);
+		}
+
+		mg_mgr_free(mgr);
+		_listenEventData = nullptr;
+		AppendMsg(L"Websocket服务端事件循环结束");
+	}).detach();
+
 	CString tmpStr;
+	_editPort.GetWindowText(tmpStr);
+	const int port = _wtoi(tmpStr);
+	CStringA url;
+	if (IsUseSSL())
+	{
+		url.Format("wss://0.0.0.0:%d", port);
+	}
+	else
+	{
+		url.Format("ws://0.0.0.0:%d", port);
+	}
+
+	_listenEventData = make_shared<EventData>(this);
+	_listenEventData->conn = mg_http_listen(mgr, url, OnWebsocketServerEvent, _listenEventData.get());
+	if (!_listenEventData->conn)
+	{
+		AppendMsg(L"Websocket开始监听失败");
+		_isNeedDeleteMgr = true;
+		return;
+	}
+
+	AppendMsg(L"Websocket开始监听");
+}
+
+void CMongooseExample_MFCDlg::OnBtnWebsocketServerStop()
+{
+	if (_listenEventData)
+	{
+		_listenEventData->conn->is_draining = true;
+		AppendMsg(L"Websocket 服务端停止");
+	}
+
+	// 关闭事件循环
+	_isNeedDeleteMgr = true;
+
+	_isWebsocket = false;
+}
+
+static void OnWebsocketClientEvent(struct mg_connection* conn, int ev, void* ev_data, void* fn_data) 
+{
+	EventData* eventData = (EventData*)fn_data;
+	CString tmpStr;
+
+	switch (ev)
+	{
+	case MG_EV_ERROR:
+	{
+		CString tmpStr;
+		tmpStr.Format(L"Websocket客户端发生错误 remote:%s local:%s", GenerateIPPortString(conn->rem), GenerateIPPortString(conn->loc));
+		eventData->dlg->AppendMsg(tmpStr);
+
+		eventData->dlg->OnDisconnectServer();
+	}
+	break;
+	case MG_EV_POLL:
+		break;
+	case MG_EV_OPEN:
+	{
+		CString tmpStr;
+		tmpStr.Format(L"Websocket客户端初始化完成 local:%s", GenerateIPPortString(conn->loc));
+		eventData->dlg->AppendMsg(tmpStr);
+		break;
+	}
+	break;
+	case MG_EV_CONNECT:
+	{
+		CString tmpStr;
+		tmpStr.Format(L"与服务端remote:%s连接成功 local:%s", GenerateIPPortString(conn->rem), GenerateIPPortString(conn->loc));
+		eventData->dlg->AppendMsg(tmpStr);
+	}
+	break;
+	case MG_EV_RESOLVE:
+	{
+		CString tmpStr;
+		tmpStr.Format(L"MG_EV_RESOLVE remote:%s local:%s", GenerateIPPortString(conn->rem), GenerateIPPortString(conn->loc));
+		eventData->dlg->AppendMsg(tmpStr);
+	}
+	break;
+	case MG_EV_READ:
+	case MG_EV_WRITE:
+		break;
+	case MG_EV_CLOSE:
+	{
+		CString tmpStr;
+		tmpStr.Format(L"与服务端remote:%s连接断开 local:%s", GenerateIPPortString(conn->rem), GenerateIPPortString(conn->loc));
+		eventData->dlg->AppendMsg(tmpStr);
+
+		eventData->dlg->OnDisconnectServer();
+	}
+	break;
+	case MG_EV_WS_OPEN:
+	{
+		CString tmpStr;
+		tmpStr.Format(L"与服务端remote:%s websocket协议成功 local:%s", GenerateIPPortString(conn->rem), GenerateIPPortString(conn->loc));
+		eventData->dlg->AppendMsg(tmpStr);
+	}
+	break;
+	case MG_EV_WS_MSG:
+	{
+		struct mg_ws_message* wm = (struct mg_ws_message*)ev_data;
+		tmpStr.Format(L"收到MG_EV_WS_MSG数据 大小:%u", wm->data.len);
+		eventData->dlg->AppendMsg(tmpStr);
+	}
+	break;
+	default:
+	{
+		tmpStr.Format(L"OnWebsocketClientEvent unhandle ev:%d", ev);
+		eventData->dlg->AppendMsg(tmpStr);
+	}
+		break;
+	}
+}
+
+void CMongooseExample_MFCDlg::OnBtnWebsocketConnect()
+{
+	_isNeedDeleteMgr = false;
+	_isWebsocket = true;
+
+	CString tmpStr;
+	DWORD dwRemoteIP;
+	_ipRemote.GetAddress(dwRemoteIP);
+	string remoteIP;
+	ConvertIPLocal2Local(dwRemoteIP, remoteIP);
+
 	_editRemotePort.GetWindowText(tmpStr);
 	const int remotePort = _wtoi(tmpStr);
 
-	CFileDialog dlg(TRUE, NULL, NULL, OFN_FILEMUSTEXIST,
-		_T("All Files (*.*)|*.*||"),
-		NULL);
-	if (dlg.DoModal() != IDOK)
+	mg_mgr* mgr = new mg_mgr;
+	mg_mgr_init(mgr);
+	thread([&, mgr]
 	{
+		while (!_isNeedDeleteMgr)
+		{
+			mg_mgr_poll(mgr, 1);
+		}
+
+		mg_mgr_free(mgr);
+		AppendMsg(L"Websocket客户端事件循环结束");
+	}).detach();
+
+	CStringA url;
+	if (IsUseSSL())
+	{
+		url.Format("wss://%s:%d/websocket", remoteIP.c_str(), remotePort);
+	}
+	else
+	{
+		url.Format("ws://%s:%d/websocket", remoteIP.c_str(), remotePort);
+	}
+	CString strLog;
+	strLog.Format(L"开始连接服务端：%s", S2Unicode(url).c_str());
+	AppendMsg(strLog);
+
+	_currentEventData = make_shared<EventData>(this);
+	_currentEventData->conn = mg_ws_connect(mgr, url, OnWebsocketClientEvent, _currentEventData.get(), nullptr);
+	if (nullptr == _currentEventData->conn)
+	{
+		_isNeedDeleteMgr = true;
+		AppendMsg(L"mg_ws_connect失败");
 		return;
 	}
 
-	// 加载文件
-	/*
-	* _wsopen_s说明
-	https://docs.microsoft.com/zh-cn/previous-versions/w64k0ytk(v=vs.110)?redirectedfrom=MSDN
-	*/
-	int readFile = NULL;
-	int ret = _wsopen_s(&readFile, dlg.GetPathName(), _O_RDONLY | _O_BINARY, _SH_DENYWR, _S_IREAD); // 使用宽字节接口解决中文问题
-	if (0 != ret)
+	if (IsUseSSL())
 	{
-		AppendMsg(L"读取文件失败");
-		return;
+		mg_tls_opts tlsOpts;
+		memset(&tlsOpts, 0, sizeof(mg_tls_opts));
+		mg_tls_init(_currentEventData->conn, &tlsOpts);
+	}
+}
+
+void CMongooseExample_MFCDlg::OnBtnWebsocketDisconnectServer()
+{
+	if (_currentEventData && _currentEventData->conn)
+	{
+		AppendMsg(L"客户端手动断开连接");
+
+		_currentEventData->conn->is_draining = true;
 	}
 
-	struct _stat64 st;
-	_wstat64(dlg.GetPathName(), &st); // 获取文件信息
-	if (st.st_size > HTTP_MAX_BODY_SIZE)
-	{
-		AppendMsg(L"文件体积过大");
-		return;
-	}
+	// 关闭事件循环
+	_isNeedDeleteMgr = true;
 
-	CString strURI;
-	strURI.Format(L"http://127.0.0.1:%d/api/postFileA?q=test&s=some+thing", remotePort);
-	string utf8URI = UnicodeToUTF8(strURI);
-	const char* uri = utf8URI.c_str();
-
-	// 	evthread_use_windows_threads();
-	// 	event_base* eventBase = event_base_new();
-	// 
-	// 	HttpData* httpData = new HttpData;
-	// 	httpData->dlg = this;
-	// 
-	// 	httpData->evURI = evhttp_uri_parse(uri);
-	// 	const char* host = evhttp_uri_get_host(httpData->evURI);
-	// 	int port = evhttp_uri_get_port(httpData->evURI);
-	// 
-	// 	if (IsUseSSL())
-	// 	{
-	// 		// bufferevent_openssl_socket_new方法包含了对bufferevent和SSL的管理，因此当连接关闭的时候不再需要SSL_free
-	// 		httpData->ssl_ctx = SSL_CTX_new(TLS_client_method());
-	// 		httpData->ssl = SSL_new(httpData->ssl_ctx);
-	// 		httpData->bev = bufferevent_openssl_socket_new(eventBase, -1, httpData->ssl, BUFFEREVENT_SSL_CONNECTING, BEV_OPT_CLOSE_ON_FREE | BEV_OPT_DEFER_CALLBACKS);
-	// 		if (httpData->bev)
-	// 		{
-	// 			bufferevent_openssl_set_allow_dirty_shutdown(httpData->bev, 1);
-	// 		}
-	// 	}
-	// 	else
-	// 	{
-	// 		httpData->bev = bufferevent_socket_new(eventBase, -1, BEV_OPT_CLOSE_ON_FREE);
-	// 	}
-	// 	if (httpData->bev == NULL)
-	// 	{
-	// 		AppendMsg(L"bev创建失败");
-	// 		delete httpData;
-	// 		return;
-	// 	}
-	// 
-	// 	httpData->evConn = evhttp_connection_base_bufferevent_new(eventBase, NULL, httpData->bev, host, port);
-	// 	if (httpData->evConn == NULL)
-	// 	{
-	// 		AppendMsg(L"evhttp_connection_base_bufferevent_new失败");
-	// 		delete httpData;
-	// 		return;
-	// 	}
-	// 
-	// 	evhttp_connection_set_max_headers_size(httpData->evConn, HTTP_MAX_HEAD_SIZE);
-	// 	evhttp_connection_set_max_body_size(httpData->evConn, HTTP_MAX_BODY_SIZE);
-	// 	//evhttp_connection_set_timeout(httpData->evConn, 30);// 可以不设置超时时间；设置超时时间，文件越大，需要的时间越长(s)
-	// 
-	// 	evhttp_request* req = evhttp_request_new(OnHttpResponsePostFileA, httpData);
-	// 
-	// 	// 标准Header
-	// 	evhttp_add_header(req->output_headers, "Connection", "keep-alive");
-	// 	evhttp_add_header(req->output_headers, "Host", "localhost");
-	// 
-	// 	// 自定义Header
-	// 	const size_t fileSize = st.st_size; // 单次最大2GB（1024 * 1024 * 1024 - 1024）
-	// 	string strFileName = UnicodeToUTF8(dlg.GetFileName()); // 文件名使用UTF-8存储
-	// 	evhttp_add_header(req->output_headers, "FileName", strFileName.c_str());
-	// 	evhttp_add_header(req->output_headers, "FileSize", Int2Str(fileSize).c_str());
-	// 
-	// 	// 文件数据
-	// 	ret = evbuffer_add_file(req->output_buffer, readFile, 0, fileSize);
-	// 	if (0 != ret)
-	// 	{
-	// 		AppendMsg(L"evbuffer_add_file失败");
-	// 		event_base_free(eventBase);
-	// 		return;
-	// 	}
-	// 
-	// 	evhttp_make_request(httpData->evConn, req, EVHTTP_REQ_POST, "/api/postFileA?q=test&s=some+thing");
-	// 
-	// 	thread([&, eventBase, httpData]
-	// 		{
-	// 			event_base_dispatch(eventBase); // 阻塞
-	// 			AppendMsg(L"客户端HttpPost event_base_dispatch线程 结束");
-	// 
-	// 			// 先断开连接，后释放eventBase
-	// 			delete httpData;
-	// 			event_base_free(eventBase);
-	// 		}).detach();
+	_isWebsocket = false;
 }

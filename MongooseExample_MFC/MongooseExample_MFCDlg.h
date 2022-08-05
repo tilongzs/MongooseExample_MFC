@@ -45,19 +45,16 @@ private:
 
 	mg_mgr	_mgr;	// 公用Mongoose管理器
 
-	// TCP/UDP
+
 	shared_ptr<EventData> _listenEventData = nullptr;
 	shared_ptr<EventData> _currentEventData = nullptr;
 	bool			_isNeedDeleteMgr = false;
-
-	// HTTP
-	// 	evhttp* _httpServer = nullptr;
-	// 	evhttp_bound_socket* _httpSocket;
+	bool			_isWebsocket = false;
 
 public:
 	void AppendMsg(const WCHAR* msg);
 	bool IsUseSSL();
-	void OnTCPAccept(shared_ptr<EventData> eventData); // 与服务端建立连接
+	void OnSetCurrentEventData(shared_ptr<EventData> eventData);
 	void OnDisconnectClient(mg_connection* conn);
 	void OnDisconnectServer();
 private:
@@ -73,6 +70,8 @@ private:
 	afx_msg void OnBtnUdpClose();
 	afx_msg void OnBtnHttpServer();
 	afx_msg void OnBtnStopHttpServer();
-	afx_msg void OnBtnHttpGet();
-	afx_msg void OnBtnHttpPostFile();
+	afx_msg void OnBtnWebsocketServer();
+	afx_msg void OnBtnWebsocketServerStop();
+	afx_msg void OnBtnWebsocketConnect();
+	afx_msg void OnBtnWebsocketDisconnectServer();
 };
