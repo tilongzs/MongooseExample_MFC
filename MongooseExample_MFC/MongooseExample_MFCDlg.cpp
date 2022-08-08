@@ -458,6 +458,7 @@ void OnTCPClientEvent(mg_connection* conn, int ev, void* ev_data, void* fn_data)
 		CString tmpStr;
 		tmpStr.Format(L"TCP客户端初始化完成 local:%s", GenerateIPPortString(conn->loc));
 		eventData->dlg->AppendMsg(tmpStr);
+
 		break;
 	}
 	break;
@@ -466,6 +467,13 @@ void OnTCPClientEvent(mg_connection* conn, int ev, void* ev_data, void* fn_data)
 		CString tmpStr;
 		tmpStr.Format(L"与服务端remote:%s连接成功 local:%s", GenerateIPPortString(conn->rem), GenerateIPPortString(conn->loc));
 		eventData->dlg->AppendMsg(tmpStr);
+
+		if (eventData->dlg->IsUseSSL())
+		{
+			mg_tls_opts tlsOpts;
+			memset(&tlsOpts, 0, sizeof(mg_tls_opts));
+			mg_tls_init(conn, &tlsOpts);
+		}
 	}
 	break;
 	case MG_EV_RESOLVE:
@@ -609,15 +617,9 @@ void CMongooseExample_MFCDlg::OnBtnConnect()
 	}
 
 	// 开始连接
+	_currentEventData->conn->is_client = true;
 	mg_resolve(_currentEventData->conn, url);
 #endif
-
-	if (IsUseSSL())
-	{
-		mg_tls_opts tlsOpts;
-		memset(&tlsOpts, 0, sizeof(mg_tls_opts));
-		mg_tls_init(_currentEventData->conn, &tlsOpts);
-	}
 }
 
 void CMongooseExample_MFCDlg::OnBtnDisconnectServer()
@@ -1189,6 +1191,13 @@ static void OnWebsocketClientEvent(struct mg_connection* conn, int ev, void* ev_
 		CString tmpStr;
 		tmpStr.Format(L"与服务端remote:%s连接成功 local:%s", GenerateIPPortString(conn->rem), GenerateIPPortString(conn->loc));
 		eventData->dlg->AppendMsg(tmpStr);
+
+		if (eventData->dlg->IsUseSSL())
+		{
+			mg_tls_opts tlsOpts;
+			memset(&tlsOpts, 0, sizeof(mg_tls_opts));
+			mg_tls_init(conn, &tlsOpts);
+		}
 	}
 	break;
 	case MG_EV_RESOLVE:
@@ -1280,13 +1289,6 @@ void CMongooseExample_MFCDlg::OnBtnWebsocketConnect()
 		_isNeedDeleteMgr = true;
 		AppendMsg(L"mg_ws_connect失败");
 		return;
-	}
-
-	if (IsUseSSL())
-	{
-		mg_tls_opts tlsOpts;
-		memset(&tlsOpts, 0, sizeof(mg_tls_opts));
-		mg_tls_init(_currentEventData->conn, &tlsOpts);
 	}
 }
 
