@@ -170,16 +170,6 @@ BOOL CMongooseExample_MFCDlg::OnInitDialog()
 
 	AfxSocketInit();
 
-	// 初始化公用Mongoose管理器
-	mg_mgr_init(&_mgr);
-	thread([&]
-		{
-			while (true)
-			{
-				mg_mgr_poll(&_mgr, 1);
-			}
-		}).detach();
-
 	AppendMsg(L"启动 Mongoose is not thread-safe");
 	return TRUE;
 }
@@ -252,6 +242,11 @@ void CMongooseExample_MFCDlg::OnDisconnectServer()
 	_isNeedDeleteMgr = true;
 }
 
+void CMongooseExample_MFCDlg::SetNeedDeleteMgr()
+{
+	_isNeedDeleteMgr = true;
+}
+
 LRESULT CMongooseExample_MFCDlg::OnFunction(WPARAM wParam, LPARAM lParam)
 {
 	TheadFunc* pFunc = (TheadFunc*)wParam;
@@ -264,12 +259,30 @@ LRESULT CMongooseExample_MFCDlg::OnFunction(WPARAM wParam, LPARAM lParam)
 void timer_fn(void* arg)
 {
 	CMongooseExample_MFCDlg* dlg = (CMongooseExample_MFCDlg*)arg;
+	dlg->SetNeedDeleteMgr();
+
 	dlg->AppendMsg(L"定时器");
 }
 
 void CMongooseExample_MFCDlg::OnBtnCreatetimer()
 {
-	/*mg_timer* timer = */mg_timer_add(&_mgr, 2000, MG_TIMER_ONCE/*一次性*/, timer_fn, this);
+	_isNeedDeleteMgr = false;
+
+	mg_mgr* mgr = new mg_mgr;
+	mg_mgr_init(mgr);
+	thread([&, mgr]
+	{
+		while (!_isNeedDeleteMgr)
+		{
+			mg_mgr_poll(mgr, 1);
+		}
+
+		mg_mgr_free(mgr);
+		_listenEventData = nullptr;
+		AppendMsg(L"定时器事件循环结束");
+	}).detach();
+
+	/*mg_timer* timer = */mg_timer_add(mgr, 2000, MG_TIMER_ONCE/*一次性*/, timer_fn, this);
 }
 
 void CMongooseExample_MFCDlg::OnBtnDisconnClient()
@@ -645,7 +658,8 @@ void CMongooseExample_MFCDlg::OnBtnSendMsg()
 			// 		int len = strlen(msg);
 
 			const size_t len = 1024 * 10;
-			char* msg = new char[len] {0};
+			char* msg = new char[len]{0};
+			memset(msg, 'T', len - 1);
 
 			if (_isWebsocket)
 			{
@@ -1093,6 +1107,8 @@ static void OnWebsocketServerEvent(struct mg_connection* conn, int ev, void* ev_
 		listenEventData->dlg->AppendMsg(tmpStr);
 	}
 	break;
+	case MG_EV_WS_CTL:
+	break;
 	default:
 	{
 		tmpStr.Format(L"OnWebsocketServerEvent unhandle ev:%d", ev);
@@ -1164,6 +1180,11 @@ static void OnWebsocketClientEvent(struct mg_connection* conn, int ev, void* ev_
 {
 	EventData* eventData = (EventData*)fn_data;
 	CString tmpStr;
+
+	if (!eventData->dlg)
+	{
+		return;
+	}
 
 	switch (ev)
 	{

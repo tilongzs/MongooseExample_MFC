@@ -43,9 +43,6 @@ private:
 	CButton _btnStopHttpServer;
 	CIPAddressCtrl _ipRemote;
 
-	mg_mgr	_mgr;	// 公用Mongoose管理器
-
-
 	shared_ptr<EventData> _listenEventData = nullptr;
 	shared_ptr<EventData> _currentEventData = nullptr;
 	bool			_isNeedDeleteMgr = false;
@@ -57,6 +54,7 @@ public:
 	void OnSetCurrentEventData(shared_ptr<EventData> eventData);
 	void OnDisconnectClient(mg_connection* conn);
 	void OnDisconnectServer();
+	void SetNeedDeleteMgr();
 private:
 	afx_msg void OnBtnDisconnClient();
 	afx_msg void OnBtnListen();
