@@ -20,7 +20,7 @@
 #ifndef MONGOOSE_H
 #define MONGOOSE_H
 
-#define MG_VERSION "7.7"
+#define MG_VERSION "7.8"
 
 #ifdef __cplusplus
 extern "C" {
@@ -62,13 +62,13 @@ extern "C" {
 #endif
 
 #if !defined(MG_ARCH)
+#include <mongoose_custom.h>
+#endif
+
+#if !defined(MG_ARCH)
 #error "MG_ARCH is not specified and we couldn't guess it. Set -D MG_ARCH=..."
 #endif
 #endif  // !defined(MG_ARCH)
-
-#if MG_ARCH == MG_ARCH_CUSTOM
-#include <mongoose_custom.h>
-#endif
 
 
 
@@ -168,6 +168,7 @@ extern "C" {
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -201,15 +202,11 @@ static inline void *mg_calloc(int cnt, size_t size) {
 #define calloc(a, b) mg_calloc((a), (b))
 #define free(a) vPortFree(a)
 #define malloc(a) pvPortMalloc(a)
-
+#define strdup(s) ((char *) mg_strdup(mg_str(s)).ptr)
 #define mkdir(a, b) (-1)
 
 #ifndef MG_IO_SIZE
 #define MG_IO_SIZE 512
-#endif
-
-#ifndef MG_PATH_MAX
-#define MG_PATH_MAX 128
 #endif
 
 #endif  // MG_ARCH == MG_ARCH_FREERTOS_LWIP
@@ -230,9 +227,11 @@ static inline void *mg_calloc(int cnt, size_t size) {
 #include <time.h>
 
 #include <FreeRTOS.h>
+#include <list.h>
+#include <task.h>
+
 #include <FreeRTOS_IP.h>
 #include <FreeRTOS_Sockets.h>
-#include <task.h>
 
 // Why FreeRTOS-TCP did not implement a clean BSD API, but its own thing
 // with FreeRTOS_ prefix, is beyond me
@@ -435,7 +434,9 @@ extern int SockSet(SOCKET hSock, int Type, int Prop, void *pbuf, int size);
 #include <mach/mach_time.h>
 #endif
 
-#if !defined(MG_ENABLE_POLL) && (defined(__linux__) || defined(__APPLE__))
+#if !defined(MG_ENABLE_EPOLL) && defined(__linux__)
+#define MG_ENABLE_EPOLL 1
+#elif !defined(MG_ENABLE_POLL)
 #define MG_ENABLE_POLL 1
 #endif
 
@@ -457,11 +458,15 @@ extern int SockSet(SOCKET hSock, int Type, int Prop, void *pbuf, int size);
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#if defined(MG_ENABLE_POLL) && MG_ENABLE_POLL
+
+#if defined(MG_ENABLE_EPOLL) && MG_ENABLE_EPOLL
+#include <sys/epoll.h>
+#elif defined(MG_ENABLE_POLL) && MG_ENABLE_POLL
 #include <poll.h>
 #else
 #include <sys/select.h>
 #endif
+
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -471,6 +476,10 @@ extern int SockSet(SOCKET hSock, int Type, int Prop, void *pbuf, int size);
 
 #ifndef MG_ENABLE_DIRLIST
 #define MG_ENABLE_DIRLIST 1
+#endif
+
+#ifndef MG_PATH_MAX
+#define MG_PATH_MAX FILENAME_MAX
 #endif
 
 #endif
@@ -538,9 +547,11 @@ typedef enum { false = 0, true = 1 } bool;
 
 typedef int socklen_t;
 #define MG_DIRSEP '\\'
-#ifndef PATH_MAX
-#define PATH_MAX MAX_PATH
+
+#ifndef MG_PATH_MAX
+#define MG_PATH_MAX FILENAME_MAX
 #endif
+
 #ifndef EINPROGRESS
 #define EINPROGRESS WSAEINPROGRESS
 #endif
@@ -611,6 +622,10 @@ int sscanf(const char *, const char *, ...);
 #define MG_ENABLE_POLL 0
 #endif
 
+#ifndef MG_ENABLE_EPOLL
+#define MG_ENABLE_EPOLL 0
+#endif
+
 #ifndef MG_ENABLE_FATFS
 #define MG_ENABLE_FATFS 0
 #endif
@@ -667,7 +682,7 @@ int sscanf(const char *, const char *, ...);
 // Granularity of the send/recv IO buffer growth
 #ifndef MG_IO_SIZE
 //#define MG_IO_SIZE 2048
-#define MG_IO_SIZE 1024*64
+#define MG_IO_SIZE (1024 * 64) // 修改默认值
 #endif
 
 // Maximum size of the recv IO buffer
@@ -676,7 +691,7 @@ int sscanf(const char *, const char *, ...);
 #endif
 
 #ifndef MG_MAX_HTTP_HEADERS
-#define MG_MAX_HTTP_HEADERS 40
+#define MG_MAX_HTTP_HEADERS 30
 #endif
 
 #ifndef MG_HTTP_INDEX
@@ -705,6 +720,23 @@ int sscanf(const char *, const char *, ...);
 #else
 #define MG_ENABLE_FILE 0
 #endif
+#endif
+
+#if MG_ENABLE_EPOLL
+#define MG_EPOLL_ADD(c)                                                    \
+  do {                                                                     \
+    struct epoll_event ev = {EPOLLIN | EPOLLERR | EPOLLHUP, {c}};          \
+    epoll_ctl(c->mgr->epoll_fd, EPOLL_CTL_ADD, (int) (size_t) c->fd, &ev); \
+  } while (0)
+#define MG_EPOLL_MOD(c, wr)                                                \
+  do {                                                                     \
+    struct epoll_event ev = {EPOLLIN | EPOLLERR | EPOLLHUP, {c}};          \
+    if (wr) ev.events |= EPOLLOUT;                                         \
+    epoll_ctl(c->mgr->epoll_fd, EPOLL_CTL_MOD, (int) (size_t) c->fd, &ev); \
+  } while (0)
+#else
+#define MG_EPOLL_ADD(c)
+#define MG_EPOLL_MOD(c, wr)
 #endif
 
 
@@ -753,21 +785,15 @@ char *mg_remove_double_dots(char *s);
 
 typedef void (*mg_pfn_t)(char, void *);                  // Custom putchar
 typedef size_t (*mg_pm_t)(mg_pfn_t, void *, va_list *);  // %M printer
-void mg_pfn_realloc(char ch, void *param);  // Print to malloced str
-void mg_pfn_iobuf(char ch, void *param);    // Print to iobuf
+void mg_pfn_iobuf(char ch, void *param);                 // iobuf printer
 
-size_t mg_lld(char *buf, int64_t val, bool is_signed, bool is_hex);
-double mg_atod(const char *buf, int len, int *numlen);
-size_t mg_dtoa(char *buf, size_t len, double d, int width);
-
-size_t mg_vrprintf(void (*)(char, void *), void *, const char *fmt, va_list *);
-size_t mg_rprintf(void (*fn)(char, void *), void *, const char *fmt, ...);
+size_t mg_vxprintf(void (*)(char, void *), void *, const char *fmt, va_list *);
+size_t mg_xprintf(void (*fn)(char, void *), void *, const char *fmt, ...);
 size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list *ap);
 size_t mg_snprintf(char *, size_t, const char *fmt, ...);
-size_t mg_asprintf(char **, size_t, const char *fmt, ...);
-size_t mg_vasprintf(char **buf, size_t size, const char *fmt, va_list ap);
+char *mg_vmprintf(const char *fmt, va_list *ap);
 char *mg_mprintf(const char *fmt, ...);
-char *mg_vmprintf(const char *fmt, va_list ap);
+
 
 
 
@@ -778,7 +804,7 @@ void mg_log(const char *fmt, ...);
 bool mg_log_prefix(int ll, const char *file, int line, const char *fname);
 void mg_log_set(int log_level);
 void mg_hexdump(const void *buf, size_t len);
-void mg_log_set_fn(void (*logfunc)(unsigned char ch));
+void mg_log_set_fn(mg_pfn_t fn, void *param);
 
 #if MG_ENABLE_LOG
 #define MG_LOG(level, args)                                                \
@@ -1014,6 +1040,7 @@ struct mg_mgr {
   uint16_t mqtt_id;             // MQTT IDs for pub/sub
   void *active_dns_requests;    // DNS requests in progress
   struct mg_timer *timers;      // Active timers
+  int epoll_fd;                 // Used when MG_EPOLL_ENABLE=1
   void *priv;                   // Used by the MIP stack
   size_t extraconnsize;         // Used by the MIP stack
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP
@@ -1050,6 +1077,7 @@ struct mg_connection {
   unsigned is_draining : 1;    // Send remaining data, then close and free
   unsigned is_closing : 1;     // Close and free the connection immediately
   unsigned is_full : 1;        // Stop reads, until cleared
+  unsigned is_resp : 1;        // Response is still being generated
   unsigned is_readable : 1;    // Connection is ready to read
   unsigned is_writable : 1;    // Connection is ready to write
 };
@@ -1226,10 +1254,11 @@ struct mg_connection *mg_ws_connect(struct mg_mgr *, const char *url,
                                     const char *fmt, ...);
 void mg_ws_upgrade(struct mg_connection *, struct mg_http_message *,
                    const char *fmt, ...);
-size_t mg_ws_send(struct mg_connection *, const char *buf, size_t len, int op);
+size_t mg_ws_send(struct mg_connection *, const void *buf, size_t len, int op);
 size_t mg_ws_wrap(struct mg_connection *, size_t len, int op);
 size_t mg_ws_printf(struct mg_connection *c, int op, const char *fmt, ...);
-size_t mg_ws_vprintf(struct mg_connection *c, int op, const char *fmt, va_list);
+size_t mg_ws_vprintf(struct mg_connection *c, int op, const char *fmt,
+                     va_list *);
 
 
 
@@ -1296,10 +1325,6 @@ void mg_mqtt_sub(struct mg_connection *, struct mg_str topic, int qos);
 int mg_mqtt_parse(const uint8_t *, size_t, uint8_t, struct mg_mqtt_message *);
 void mg_mqtt_send_header(struct mg_connection *, uint8_t cmd, uint8_t flags,
                          uint32_t len);
-size_t mg_mqtt_next_sub(struct mg_mqtt_message *msg, struct mg_str *topic,
-                        uint8_t *qos, size_t pos);
-size_t mg_mqtt_next_unsub(struct mg_mqtt_message *msg, struct mg_str *topic,
-                          size_t pos);
 void mg_mqtt_ping(struct mg_connection *);
 void mg_mqtt_pong(struct mg_connection *);
 void mg_mqtt_disconnect(struct mg_connection *);
@@ -1399,8 +1424,7 @@ void mg_rpc_list(struct mg_rpc_req *r);
 
 
 struct mip_driver {
-  void *data;                                       // Driver-specific data
-  void (*init)(void *data);                         // Initialise driver
+  void (*init)(uint8_t *mac, void *data);           // Initialise driver
   size_t (*tx)(const void *, size_t, void *data);   // Transmit frame
   size_t (*rx)(void *buf, size_t len, void *data);  // Receive frame (polling)
   bool (*status)(void *data);                       // Up/down status
@@ -1413,7 +1437,7 @@ struct mip_ipcfg {
   uint32_t ip, mask, gw;  // IP, netmask, GW. If IP is 0, DHCP is used
 };
 
-void mip_init(struct mg_mgr *, struct mip_ipcfg *, struct mip_driver *);
+void mip_init(struct mg_mgr *, struct mip_ipcfg *, struct mip_driver *, void *);
 
 extern struct mip_driver mip_driver_stm32;
 

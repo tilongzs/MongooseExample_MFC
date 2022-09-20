@@ -171,6 +171,7 @@ BOOL CMongooseExample_MFCDlg::OnInitDialog()
 	AfxSocketInit();
 
 	AppendMsg(L"启动 Mongoose is not thread-safe");
+	AppendMsg(L"#define MG_IO_SIZE (1024 * 64) // 修改默认值");
 	return TRUE;
 }
 
